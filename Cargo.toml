@@ -1,0 +1,154 @@
+[package]
+name = "espframe"
+version = "0.1.0"
+edition = "2021"
+description = "Shared Rust components for Android native runtimes"
+repository = "https://github.com/yowal2024/espframe-rs"
+
+
+[features]
+default = ["xdl"]
+xdl = []
+soloader = ["dep:goblin"]
+jni = ["dep:jni"]
+binder = ["dep:binder_ndk"]
+
+[dependencies]
+aes = "0.8"
+base64 = "0.22"
+bitflags = "2"
+capstone = "0.12"
+cbc = { version = "0.1", features = ["alloc", "block-padding"] }
+crc32fast = "1"
+hex = "0.4"
+hmac = "0.12"
+imgui = { package = "dear-imgui-rs", git = "https://github.com/Latias94/dear-imgui-rs.git", rev = "1d26eb658490aca1ffba2a520f766068368bb907" }
+libc = "0.2"
+jni = { version = "0.21", optional = true }
+flate2 = "1"
+goblin = { version = "0.10.7", optional = true }
+rand = "0.8"
+rsa = { version = "0.9", features = ["pem", "sha2"] }
+rustls = "=0.22.4"
+rustls-pemfile = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror = "2"
+ureq = { version = "=2.9.7", default-features = false, features = ["tls"] }
+url = "2"
+webpki-roots = "0.26"
+
+[target.'cfg(target_os = "android")'.dependencies]
+dobby-rs = "=0.1.0"
+binder_ndk = { git = "https://github.com/yowal2024/binder_rs.git", rev = "6627342872bf62ddea05e2d8f98f4fda3120256d", optional = true }
+dear-imgui-sys = { package = "dear-imgui-sys", git = "https://github.com/Latias94/dear-imgui-rs.git", rev = "1d26eb658490aca1ffba2a520f766068368bb907", features = ["backend-shim-android", "backend-shim-opengl3"] }
+
+[[test]]
+name = "jni"
+path = "tests/jni.rs"
+required-features = ["jni"]
+
+[[test]]
+name = "monarch_advanced_services"
+path = "tests/monarch/advanced_services.rs"
+
+[[test]]
+name = "monarch_instruction_parity"
+path = "tests/monarch/instruction_parity.rs"
+
+[[test]]
+name = "monarch_memory_parity"
+path = "tests/monarch/memory_parity.rs"
+
+[[test]]
+name = "monarch_policy_parity"
+path = "tests/monarch/policy_parity.rs"
+
+[[test]]
+name = "monarch_runner_lifecycle"
+path = "tests/monarch/runner_lifecycle.rs"
+
+[[test]]
+name = "monarch_service_abi"
+path = "tests/monarch/service_abi.rs"
+
+[[example]]
+name = "display_snapshot"
+required-features = ["xdl", "binder"]
+
+[[example]]
+name = "display_binder_probe"
+path = "tests/android/display_binder_probe.rs"
+crate-type = ["cdylib"]
+required-features = ["xdl", "jni", "binder"]
+
+[[test]]
+name = "xdl_xdl_loaded"
+path = "tests/xdl/xdl_loaded.rs"
+required-features = ["xdl"]
+
+[[test]]
+name = "xdl_xdl_api"
+path = "tests/xdl/xdl_api.rs"
+required-features = ["xdl"]
+
+[[test]]
+name = "xdl_lzma"
+path = "tests/xdl/lzma.rs"
+required-features = ["xdl"]
+
+[[test]]
+name = "soloader_tls"
+path = "tests/soloader/tls.rs"
+required-features = ["soloader"]
+
+[[test]]
+name = "soloader_smoke"
+path = "tests/soloader/smoke.rs"
+required-features = ["soloader"]
+
+[[test]]
+name = "soloader_sleb128"
+path = "tests/soloader/sleb128.rs"
+required-features = ["soloader"]
+
+[[test]]
+name = "soloader_runtime"
+path = "tests/soloader/runtime.rs"
+required-features = ["soloader"]
+
+[[test]]
+name = "soloader_reloc"
+path = "tests/soloader/reloc.rs"
+required-features = ["soloader"]
+
+[[test]]
+name = "soloader_mapping"
+path = "tests/soloader/mapping.rs"
+required-features = ["soloader"]
+
+[[test]]
+name = "soloader_loader"
+path = "tests/soloader/loader.rs"
+required-features = ["soloader"]
+
+[[test]]
+name = "soloader_elf"
+path = "tests/soloader/elf.rs"
+required-features = ["soloader"]
+
+[[test]]
+name = "soloader_deps"
+path = "tests/soloader/deps.rs"
+required-features = ["soloader"]
+
+[[test]]
+name = "soloader_carray"
+path = "tests/soloader/carray.rs"
+required-features = ["soloader"]
+
+[[test]]
+name = "soloader_backtrace"
+path = "tests/soloader/backtrace.rs"
+required-features = ["soloader"]

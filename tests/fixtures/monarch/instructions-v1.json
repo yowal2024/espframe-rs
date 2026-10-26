@@ -1,0 +1,754 @@
+{
+  "format_version": 1,
+  "source": "Rust delta-monarch instruction parity fixture derived from the historical Monarch test corpus and sub0-current-16951.asm capture",
+  "cases": [
+    {
+      "name": "mov immediate alias",
+      "pc": 4096,
+      "word": "0xD28AF797",
+      "after_x": { "23": 22460 },
+      "after_pc": 4100,
+      "outcome": "continue"
+    },
+    {
+      "name": "shifted add immediate",
+      "pc": 8192,
+      "word": "0x91400400",
+      "before_x": { "0": 2 },
+      "after_x": { "0": 4098 },
+      "after_pc": 8196,
+      "outcome": "continue"
+    },
+    {
+      "name": "adds sets zero and carry",
+      "pc": 12288,
+      "word": "0xAB010002",
+      "before_x": { "0": 18446744073709551615, "1": 1 },
+      "after_x": { "2": 0 },
+      "after_pc": 12292,
+      "after_nzcv": 1610612736,
+      "outcome": "continue"
+    },
+    {
+      "name": "conditional branch taken",
+      "pc": 16384,
+      "word": "0x54000060",
+      "before_nzcv": 1073741824,
+      "after_pc": 16396,
+      "after_nzcv": 1073741824,
+      "outcome": "branch"
+    },
+    {
+      "name": "conditional branch not taken",
+      "pc": 20480,
+      "word": "0x54000060",
+      "after_pc": 20484,
+      "outcome": "continue"
+    },
+    {
+      "name": "madd from current dump",
+      "pc": 24576,
+      "word": "0x9B11358C",
+      "before_x": { "12": 2, "17": 3, "13": 4 },
+      "after_x": { "12": 10 },
+      "after_pc": 24580,
+      "outcome": "continue"
+    },
+    {
+      "name": "store x register",
+      "pc": 28672,
+      "word": "0xF9000401",
+      "before_x": { "0": 32768, "1": 1234605616436508552 },
+      "memory": [{ "address": 32776, "bytes": "0000000000000000" }],
+      "after_x": { "0": 32768, "1": 1234605616436508552 },
+      "after_pc": 28676,
+      "writes": [{ "address": 32776, "bytes": "8877665544332211" }],
+      "outcome": "continue"
+    },
+    {
+      "name": "load x register",
+      "pc": 36864,
+      "word": "0xF9400402",
+      "before_x": { "0": 40960 },
+      "memory": [{ "address": 40968, "bytes": "8877665544332211" }],
+      "after_x": { "2": 1234605616436508552 },
+      "after_pc": 36868,
+      "outcome": "continue"
+    },
+    {
+      "name": "pacga current path",
+      "pc": 45056,
+      "word": "0x9AC33041",
+      "before_x": { "1": 3735928559, "2": 1161981756646125696, "3": 9833440827789222417 },
+      "after_x": { "1": 11936128515503554560, "2": 1161981756646125696, "3": 9833440827789222417 },
+      "after_pc": 45060,
+      "pauth_result": 11936128515503554560,
+      "outcome": "continue"
+    },
+    {
+      "name": "svc trap keeps syscall number",
+      "pc": 49152,
+      "word": "0xD4000001",
+      "before_x": { "8": 29 },
+      "after_x": { "8": 29 },
+      "after_pc": 49156,
+      "outcome": "svc"
+    },
+    {
+      "name": "fmov scalar bits to w register",
+      "pc": 53248,
+      "word": "0x1E260009",
+      "before_v": { "0": "0000803f000000000000000000000000" },
+      "after_x": { "9": 1065353216 },
+      "after_v": { "0": "0000803f000000000000000000000000" },
+      "after_pc": 53252,
+      "outcome": "continue"
+    },
+    {
+      "name": "ucvtf scalar x to d",
+      "pc": 57344,
+      "word": "0x9E63011C",
+      "before_x": { "8": 42 },
+      "after_x": { "8": 42 },
+      "after_v": { "28": "00000000000045400000000000000000" },
+      "after_pc": 57348,
+      "outcome": "continue"
+    },
+    {
+      "name": "adrp reconstructs target from raw bits",
+      "pc": 52,
+      "word": "0x90000048",
+      "after_x": { "8": 32768 },
+      "after_pc": 56,
+      "outcome": "continue"
+    },
+    {
+      "name": "cset true alias writes one",
+      "pc": 61440,
+      "word": "0x1A9F17E8",
+      "before_nzcv": 1073741824,
+      "after_x": { "8": 1 },
+      "after_pc": 61444,
+      "after_nzcv": 1073741824,
+      "outcome": "continue"
+    },
+    {
+      "name": "cinc true alias increments source",
+      "pc": 61696,
+      "word": "0x1A8AA54A",
+      "before_x": { "10": 5 },
+      "before_nzcv": 2147483648,
+      "after_x": { "10": 6 },
+      "after_pc": 61700,
+      "after_nzcv": 2147483648,
+      "outcome": "continue"
+    },
+    {
+      "name": "ccmp false writes immediate nzcv",
+      "pc": 61952,
+      "word": "0xFA401924",
+      "before_x": { "9": 123 },
+      "before_nzcv": 1073741824,
+      "after_x": { "9": 123 },
+      "after_pc": 61956,
+      "after_nzcv": 1073741824,
+      "outcome": "continue"
+    },
+    {
+      "name": "neg alias subtracts from zero",
+      "pc": 62208,
+      "word": "0xCB0E03ED",
+      "before_x": { "14": 5 },
+      "after_x": { "13": 18446744073709551611 },
+      "after_pc": 62212,
+      "outcome": "continue"
+    },
+    {
+      "name": "movi clears both d lanes",
+      "pc": 62464,
+      "word": "0x6F00E400",
+      "before_v": { "0": "ffffffffffffffffffffffffffffffff" },
+      "after_v": { "0": "00000000000000000000000000000000" },
+      "after_pc": 62468,
+      "outcome": "continue"
+    },
+    {
+      "name": "dup replicates x register to two d lanes",
+      "pc": 62720,
+      "word": "0x4E080D00",
+      "before_x": { "8": 1234605616436508552 },
+      "after_x": { "8": 1234605616436508552 },
+      "after_v": { "0": "88776655443322118877665544332211" },
+      "after_pc": 62724,
+      "outcome": "continue"
+    },
+    {
+      "name": "ucvtf converts two unsigned d lanes",
+      "pc": 62976,
+      "word": "0x6E61D800",
+      "before_v": { "0": "01000000000000000200000000000000" },
+      "after_v": { "0": "000000000000f03f0000000000000040" },
+      "after_pc": 62980,
+      "outcome": "continue"
+    },
+    {
+      "name": "fmla accumulates two double lanes",
+      "pc": 63232,
+      "word": "0x4E62CC03",
+      "before_v": {
+        "0": "000000000000f83f0000000000000040",
+        "2": "00000000000000400000000000000840",
+        "3": "00000000000000000000000000000000"
+      },
+      "after_v": { "3": "00000000000008400000000000001840" },
+      "after_pc": 63236,
+      "outcome": "continue"
+    },
+    {
+      "name": "cmeq writes all ones only for equal lanes",
+      "pc": 63488,
+      "word": "0x6EE38C21",
+      "before_v": {
+        "1": "05000000000000000600000000000000",
+        "3": "05000000000000000700000000000000"
+      },
+      "after_v": { "1": "ffffffffffffffff0000000000000000" },
+      "after_pc": 63492,
+      "outcome": "continue"
+    },
+    {
+      "name": "addv reduces four unsigned s lanes",
+      "pc": 63744,
+      "word": "0x4EB1B800",
+      "before_v": { "0": "01000000020000000300000004000000" },
+      "after_v": { "0": "0a000000000000000000000000000000" },
+      "after_pc": 63748,
+      "outcome": "continue"
+    },
+    {
+      "name": "cmn w register sets 32-bit carry",
+      "pc": 64000,
+      "word": "0x2B01001F",
+      "before_x": { "0": 4294967295, "1": 1 },
+      "after_x": { "0": 4294967295, "1": 1 },
+      "after_pc": 64004,
+      "after_nzcv": 1610612736,
+      "outcome": "continue"
+    },
+    {
+      "name": "pacia register operation",
+      "pc": 64256,
+      "word": "0xDAC10041",
+      "before_x": { "1": 1161981756646125696, "2": 9833440827789222417 },
+      "after_x": { "1": 11936128515503554560, "2": 9833440827789222417 },
+      "after_pc": 64260,
+      "pauth_result": 11936128515503554560,
+      "outcome": "continue"
+    },
+    {
+      "name": "pacib register operation",
+      "pc": 64512,
+      "word": "0xDAC10441",
+      "before_x": { "1": 1161981756646125696, "2": 9833440827789222417 },
+      "after_x": { "1": 11936128515503554560, "2": 9833440827789222417 },
+      "after_pc": 64516,
+      "pauth_result": 11936128515503554560,
+      "outcome": "continue"
+    },
+    {
+      "name": "pacda register operation",
+      "pc": 64768,
+      "word": "0xDAC10841",
+      "before_x": { "1": 1161981756646125696, "2": 9833440827789222417 },
+      "after_x": { "1": 11936128515503554560, "2": 9833440827789222417 },
+      "after_pc": 64772,
+      "pauth_result": 11936128515503554560,
+      "outcome": "continue"
+    },
+    {
+      "name": "pacdb register operation",
+      "pc": 65024,
+      "word": "0xDAC10C41",
+      "before_x": { "1": 1161981756646125696, "2": 9833440827789222417 },
+      "after_x": { "1": 11936128515503554560, "2": 9833440827789222417 },
+      "after_pc": 65028,
+      "pauth_result": 11936128515503554560,
+      "outcome": "continue"
+    },
+    {
+      "name": "autia register operation",
+      "pc": 65280,
+      "word": "0xDAC11041",
+      "before_x": { "1": 1161981756646125696, "2": 9833440827789222417 },
+      "after_x": { "1": 11936128515503554560, "2": 9833440827789222417 },
+      "after_pc": 65284,
+      "pauth_result": 11936128515503554560,
+      "outcome": "continue"
+    },
+    {
+      "name": "autib register operation",
+      "pc": 65536,
+      "word": "0xDAC11441",
+      "before_x": { "1": 1161981756646125696, "2": 9833440827789222417 },
+      "after_x": { "1": 11936128515503554560, "2": 9833440827789222417 },
+      "after_pc": 65540,
+      "pauth_result": 11936128515503554560,
+      "outcome": "continue"
+    },
+    {
+      "name": "autda register operation",
+      "pc": 65792,
+      "word": "0xDAC11841",
+      "before_x": { "1": 1161981756646125696, "2": 9833440827789222417 },
+      "after_x": { "1": 11936128515503554560, "2": 9833440827789222417 },
+      "after_pc": 65796,
+      "pauth_result": 11936128515503554560,
+      "outcome": "continue"
+    },
+    {
+      "name": "autdb register operation",
+      "pc": 66048,
+      "word": "0xDAC11C41",
+      "before_x": { "1": 1161981756646125696, "2": 9833440827789222417 },
+      "after_x": { "1": 11936128515503554560, "2": 9833440827789222417 },
+      "after_pc": 66052,
+      "pauth_result": 11936128515503554560,
+      "outcome": "continue"
+    },
+    {
+      "name": "xpaci register operation",
+      "pc": 66304,
+      "word": "0xDAC143E1",
+      "before_x": { "1": 1161981756646125696 },
+      "after_x": { "1": 11936128515503554560 },
+      "after_pc": 66308,
+      "pauth_result": 11936128515503554560,
+      "outcome": "continue"
+    },
+    {
+      "name": "xpacd register operation",
+      "pc": 66560,
+      "word": "0xDAC147E1",
+      "before_x": { "1": 1161981756646125696 },
+      "after_x": { "1": 11936128515503554560 },
+      "after_pc": 66564,
+      "pauth_result": 11936128515503554560,
+      "outcome": "continue"
+    },
+    {
+      "name": "pair exclusive loads both registers",
+      "pc": 66816,
+      "word": "0xC87F0801",
+      "before_x": { "0": 69632 },
+      "memory": [{ "address": 69632, "bytes": "00000000000000000000000000000000" }],
+      "after_x": { "1": 0, "2": 0 },
+      "after_pc": 66820,
+      "outcome": "continue"
+    },
+    {
+      "name": "cas atomic stores on compare match",
+      "pc": 67072,
+      "word": "0xC8A17C62",
+      "before_x": { "1": 1, "2": 2, "3": 69888 },
+      "memory": [{ "address": 69888, "bytes": "0100000000000000" }],
+      "after_x": { "1": 1, "2": 2, "3": 69888 },
+      "after_pc": 67076,
+      "writes": [{ "address": 69888, "bytes": "0200000000000000" }],
+      "outcome": "continue"
+    },
+    {
+      "name": "external system register default service is fail closed",
+      "pc": 67328,
+      "word": "0xD53B0028",
+      "after_pc": 67328,
+      "outcome": "unsupported",
+      "error_contains": "mrs"
+    },
+    {
+      "name": "authenticated branch uses pauth result",
+      "pc": 67584,
+      "word": "0xD61F085F",
+      "before_x": { "2": 4096 },
+      "after_pc": 8192,
+      "pauth_result": 8192,
+      "outcome": "branch"
+    },
+    {
+      "name": "pauth hint alias signs lr with sp",
+      "pc": 67840,
+      "word": "0xD503233F",
+      "before_x": { "30": 4096 },
+      "before_sp": 8192,
+      "after_x": { "30": 12288 },
+      "after_sp": 8192,
+      "after_pc": 67844,
+      "pauth_result": 12288,
+      "outcome": "continue"
+    },
+    {
+      "name": "ldr q reads all sixteen bytes",
+      "pc": 70000,
+      "word": "0x3DC10920",
+      "before_x": { "9": 73728 },
+      "memory": [{ "address": 74784, "bytes": "000102030405060708090a0b0c0d0e0f" }],
+      "after_x": { "9": 73728 },
+      "after_v": { "0": "000102030405060708090a0b0c0d0e0f" },
+      "after_pc": 70004,
+      "outcome": "continue"
+    },
+    {
+      "name": "str q writes all sixteen bytes",
+      "pc": 70016,
+      "word": "0x3D800924",
+      "before_x": { "9": 73728 },
+      "before_v": { "4": "000102030405060708090a0b0c0d0e0f" },
+      "memory": [{ "address": 73760, "bytes": "00000000000000000000000000000000" }],
+      "after_x": { "9": 73728 },
+      "after_v": { "4": "000102030405060708090a0b0c0d0e0f" },
+      "after_pc": 70020,
+      "writes": [{ "address": 73760, "bytes": "000102030405060708090a0b0c0d0e0f" }],
+      "outcome": "continue"
+    },
+    {
+      "name": "ldp q reads two complete registers",
+      "pc": 70032,
+      "word": "0xAD400540",
+      "before_x": { "10": 73728 },
+      "memory": [{ "address": 73728, "bytes": "1010101010101010101010101010101020202020202020202020202020202020" }],
+      "after_x": { "10": 73728 },
+      "after_v": {
+        "0": "10101010101010101010101010101010",
+        "1": "20202020202020202020202020202020"
+      },
+      "after_pc": 70036,
+      "outcome": "continue"
+    },
+    {
+      "name": "stp q writes two complete registers",
+      "pc": 70048,
+      "word": "0xAD000520",
+      "before_x": { "9": 73728 },
+      "before_v": {
+        "0": "10101010101010101010101010101010",
+        "1": "20202020202020202020202020202020"
+      },
+      "memory": [{ "address": 73728, "bytes": "0000000000000000000000000000000000000000000000000000000000000000" }],
+      "after_x": { "9": 73728 },
+      "after_v": {
+        "0": "10101010101010101010101010101010",
+        "1": "20202020202020202020202020202020"
+      },
+      "after_pc": 70052,
+      "writes": [{ "address": 73728, "bytes": "1010101010101010101010101010101020202020202020202020202020202020" }],
+      "outcome": "continue"
+    },
+    {
+      "name": "post index accesses old sp then writes back",
+      "pc": 70064,
+      "word": "0xF84107FD",
+      "before_sp": 73728,
+      "memory": [{ "address": 73728, "bytes": "8877665544332211" }],
+      "after_x": { "29": 1234605616436508552 },
+      "after_sp": 73744,
+      "after_pc": 70068,
+      "outcome": "continue"
+    },
+    {
+      "name": "logical register lsr uses w width",
+      "pc": 70080,
+      "word": "0x0A69458B",
+      "before_x": { "9": 131072, "12": 4294967295 },
+      "after_x": { "11": 4294967294 },
+      "after_pc": 70084,
+      "outcome": "continue"
+    },
+    {
+      "name": "add register asr sign extends w operand",
+      "pc": 70096,
+      "word": "0x0B8A0528",
+      "before_x": { "9": 1, "10": 4294967294 },
+      "after_x": { "8": 0 },
+      "after_pc": 70100,
+      "outcome": "continue"
+    },
+    {
+      "name": "logical register ror rotates full x width",
+      "pc": 70112,
+      "word": "0xAAC22020",
+      "before_x": { "1": 0, "2": 81985529216486895 },
+      "after_x": { "0": 17222085231038278605 },
+      "after_pc": 70116,
+      "outcome": "continue"
+    },
+    {
+      "name": "smull sign extends both w sources",
+      "pc": 70128,
+      "word": "0x9B2B7D08",
+      "before_x": { "8": 4294967295, "11": 2 },
+      "after_x": { "8": 18446744073709551614 },
+      "after_pc": 70132,
+      "outcome": "continue"
+    },
+    {
+      "name": "ccmp uses w operand width",
+      "pc": 70144,
+      "word": "0x7A400904",
+      "before_x": { "8": 2147483648 },
+      "before_nzcv": 1073741824,
+      "after_x": { "8": 2147483648 },
+      "after_pc": 70148,
+      "after_nzcv": 2684354560,
+      "outcome": "continue"
+    },
+    {
+      "name": "ccmn performs addition at w width",
+      "pc": 70160,
+      "word": "0x3A4B8100",
+      "before_x": { "8": 4294967295, "11": 1 },
+      "before_nzcv": 536870912,
+      "after_x": { "8": 4294967295, "11": 1 },
+      "after_pc": 70164,
+      "after_nzcv": 1610612736,
+      "outcome": "continue"
+    },
+    {
+      "name": "sxtw current dump alias",
+      "pc": 70176,
+      "word": "0x93407C01",
+      "before_x": { "0": 4294967295 },
+      "after_x": { "1": 18446744073709551615 },
+      "after_pc": 70180,
+      "outcome": "continue"
+    },
+    {
+      "name": "ubfiz current dump alias",
+      "pc": 70192,
+      "word": "0xD37C6D09",
+      "before_x": { "8": 305419896 },
+      "after_x": { "9": 591751040 },
+      "after_pc": 70196,
+      "outcome": "continue"
+    },
+    {
+      "name": "ubfx current dump alias",
+      "pc": 70208,
+      "word": "0xD35CED08",
+      "before_x": { "8": 1311768467463790320 },
+      "after_x": { "8": 591751049 },
+      "after_pc": 70212,
+      "outcome": "continue"
+    },
+    {
+      "name": "bfi current dump alias",
+      "pc": 70224,
+      "word": "0xB3607D4B",
+      "before_x": { "10": 12302652060662169617, "11": 1229782938533634594 },
+      "after_x": { "11": 17221483573675172386 },
+      "after_pc": 70228,
+      "outcome": "continue"
+    },
+    {
+      "name": "fmsub uses one fused rounding",
+      "pc": 70240,
+      "word": "0x1F428C20",
+      "before_v": {
+        "0": "010000000000f03f0000000000000000",
+        "1": "010000000000f03f0000000000000000",
+        "2": "010000000000f03f0000000000000000",
+        "3": "020000000000f03f0000000000000000"
+      },
+      "after_v": { "0": "00000000000070b90000000000000000" },
+      "after_pc": 70244,
+      "outcome": "continue"
+    },
+    {
+      "name": "fcvtzu accumulates inexact fpsr",
+      "pc": 70256,
+      "word": "0x9E790388",
+      "before_v": { "28": "000000000000f83f0000000000000000" },
+      "after_x": { "8": 1 },
+      "after_v": { "28": "000000000000f83f0000000000000000" },
+      "after_pc": 70260,
+      "after_fpsr": 16,
+      "outcome": "continue"
+    },
+    {
+      "name": "lane mov inserts upper d lane",
+      "pc": 70272,
+      "word": "0x4E181D00",
+      "before_x": { "8": 12302652060662169617 },
+      "before_v": { "0": "88776655443322110000000000000000" },
+      "after_x": { "8": 12302652060662169617 },
+      "after_v": { "0": "88776655443322111100ffeeddccbbaa" },
+      "after_pc": 70276,
+      "outcome": "continue"
+    },
+    {
+      "name": "vector mvn inverts all sixteen bytes",
+      "pc": 70288,
+      "word": "0x6E205800",
+      "before_v": { "0": "000102030405060708090a0b0c0d0e0f" },
+      "after_v": { "0": "fffefdfcfbfaf9f8f7f6f5f4f3f2f1f0" },
+      "after_pc": 70292,
+      "outcome": "continue"
+    },
+    {
+      "name": "mrs fpsr preserves current saturated seed",
+      "pc": 70304,
+      "word": "0xD53B442A",
+      "before_fpsr": 134217887,
+      "after_x": { "10": 134217887 },
+      "after_pc": 70308,
+      "after_fpsr": 134217887,
+      "outcome": "continue"
+    },
+    {
+      "name": "ucvtf x to s rounds directly once",
+      "pc": 70320,
+      "word": "0x9E230020",
+      "before_x": { "1": 9223372586610589697 },
+      "after_x": { "1": 9223372586610589697 },
+      "after_v": { "0": "0100005f000000000000000000000000" },
+      "after_pc": 70324,
+      "after_fpsr": 16,
+      "outcome": "continue"
+    },
+    {
+      "name": "fcvtzu d to w saturates at u32 max",
+      "pc": 70336,
+      "word": "0x1E790000",
+      "before_v": { "0": "000000000000f0410000000000000000" },
+      "after_x": { "0": 4294967295 },
+      "after_v": { "0": "000000000000f0410000000000000000" },
+      "after_pc": 70340,
+      "after_fpsr": 1,
+      "outcome": "continue"
+    },
+    {
+      "name": "fcvtzs d to w saturates at i32 max",
+      "pc": 70352,
+      "word": "0x1E780000",
+      "before_v": { "0": "000000000000e0410000000000000000" },
+      "after_x": { "0": 2147483647 },
+      "after_v": { "0": "000000000000e0410000000000000000" },
+      "after_pc": 70356,
+      "after_fpsr": 1,
+      "outcome": "continue"
+    },
+    {
+      "name": "ins writes low d lane from x10",
+      "pc": 70400,
+      "word": "0x4E081D40",
+      "before_x": { "10": 1234605616436508552 },
+      "before_v": { "0": "00000000000000001100ffeeddccbbaa" },
+      "after_x": { "10": 1234605616436508552 },
+      "after_v": { "0": "88776655443322111100ffeeddccbbaa" },
+      "after_pc": 70404,
+      "outcome": "continue"
+    },
+    {
+      "name": "umov reads low d lane into x10",
+      "pc": 70416,
+      "word": "0x4E083C0A",
+      "before_v": { "0": "88776655443322111100ffeeddccbbaa" },
+      "after_x": { "10": 1234605616436508552 },
+      "after_v": { "0": "88776655443322111100ffeeddccbbaa" },
+      "after_pc": 70420,
+      "outcome": "continue"
+    },
+    {
+      "name": "bit uses mask bits from vm",
+      "pc": 70432,
+      "word": "0x2EA11C40",
+      "before_v": {
+        "0": "aaaaaaaaaaaaaaaa0000000000000000",
+        "1": "0f0f0f0f0f0f0f0f0000000000000000",
+        "2": "33333333333333330000000000000000"
+      },
+      "after_v": { "0": "a3a3a3a3a3a3a3a30000000000000000" },
+      "after_pc": 70436,
+      "outcome": "continue"
+    },
+    {
+      "name": "uzp2 keeps odd lanes from both vectors",
+      "pc": 70448,
+      "word": "0x4E845862",
+      "before_v": {
+        "3": "30000000310000003200000033000000",
+        "4": "40000000410000004200000043000000"
+      },
+      "after_v": { "2": "31000000330000004100000043000000" },
+      "after_pc": 70452,
+      "outcome": "continue"
+    },
+    {
+      "name": "umaxp computes pairwise maxima across both vectors",
+      "pc": 70464,
+      "word": "0x6E32A633",
+      "before_v": {
+        "17": "010903070802040605000b0a0c0e0f0d",
+        "18": "1e14121610181c1a020408060a0c0e00"
+      },
+      "after_v": { "19": "09070806050b0e0f1e16181c04080c0e" },
+      "after_pc": 70468,
+      "outcome": "continue"
+    },
+    {
+      "name": "ushl uses signed low byte shifts",
+      "pc": 70480,
+      "word": "0x6EE74486",
+      "before_v": {
+        "4": "07000000000000000700000000000000",
+        "7": "0100000000000000ffdebc9a78563412"
+      },
+      "after_v": { "6": "0e000000000000000300000000000000" },
+      "after_pc": 70484,
+      "outcome": "continue"
+    },
+    {
+      "name": "xtn2 preserves low half and narrows into upper half",
+      "pc": 70496,
+      "word": "0x4EA12821",
+      "before_v": { "1": "887766554433221100ffeeddccbbaa99" },
+      "after_v": { "1": "88776655443322118877665500ffeedd" },
+      "after_pc": 70500,
+      "outcome": "continue"
+    },
+    {
+      "name": "vector clz counts leading zeros per byte",
+      "pc": 70512,
+      "word": "0x2E204862",
+      "before_v": { "3": "0f0f0f0f0f0f0f0f0000000000000000" },
+      "after_v": { "2": "04040404040404040000000000000000" },
+      "after_pc": 70516,
+      "outcome": "continue"
+    },
+    {
+      "name": "vector rbit reverses each byte",
+      "pc": 70528,
+      "word": "0x2E6058A4",
+      "before_v": { "5": "01010101010101010000000000000000" },
+      "after_v": { "4": "80808080808080800000000000000000" },
+      "after_pc": 70532,
+      "outcome": "continue"
+    },
+    {
+      "name": "vector rev16 swaps bytes in each halfword",
+      "pc": 70544,
+      "word": "0x0E2018E6",
+      "before_v": { "7": "00010203040506070000000000000000" },
+      "after_v": { "6": "01000302050407060000000000000000" },
+      "after_pc": 70548,
+      "outcome": "continue"
+    },
+    {
+      "name": "vector rev32 reverses bytes in each word",
+      "pc": 70560,
+      "word": "0x2E200928",
+      "before_v": { "9": "00010203040506070000000000000000" },
+      "after_v": { "8": "03020100070605040000000000000000" },
+      "after_pc": 70564,
+      "outcome": "continue"
+    }
+  ]
+}

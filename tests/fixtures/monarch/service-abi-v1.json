@@ -1,0 +1,206 @@
+{
+  "schema": "delta-monarch-service-abi-v1",
+  "provenance": {
+    "kind": "synthetic-cpp-parity",
+    "source": "app/src/main/cpp/game/coord/monarch/guest_services.cpp RunKgslSemanticSelfTest and service dispatch",
+    "current_device_evidence": false
+  },
+  "cases": [
+    {
+      "name": "getpid returns configured pid without a second pc advance",
+      "before": { "x": [0, 1, 2, 3, 4, 5], "x8": 172, "nzcv": 2684354560, "pc": 4096, "exception_ticks": 7, "exclusive_state": "none", "memory": [], "virtual_syncsources": [], "virtual_objects": [] },
+      "kernel": { "valid_fds": [], "peek": [], "gpuobj": [] },
+      "after": { "x": [4242, 1, 2, 3, 4, 5], "x8": 172, "nzcv": 2684354560, "pc": 4100, "exception_ticks": 18, "exclusive_state": "cleared", "memory_diff": [], "virtual_syncsources": [], "virtual_objects": [], "kernel_calls": [] }
+    },
+    {
+      "name": "gettid returns configured tid",
+      "before": { "x": [0, 1, 2, 3, 4, 5], "x8": 178, "nzcv": 1073741824, "pc": 4352, "exception_ticks": 0, "exclusive_state": "none", "memory": [], "virtual_syncsources": [], "virtual_objects": [] },
+      "kernel": { "valid_fds": [], "peek": [], "gpuobj": [] },
+      "after": { "x": [77, 1, 2, 3, 4, 5], "x8": 178, "nzcv": 1073741824, "pc": 4356, "exception_ticks": 1, "exclusive_state": "cleared", "memory_diff": [], "virtual_syncsources": [], "virtual_objects": [], "kernel_calls": [] }
+    },
+    {
+      "name": "unknown syscall returns ENOSYS",
+      "before": { "x": [9, 8, 7, 6, 5, 4], "x8": 999, "nzcv": 536870912, "pc": 4608, "exception_ticks": 2, "exclusive_state": "none", "memory": [], "virtual_syncsources": [], "virtual_objects": [] },
+      "kernel": { "valid_fds": [], "peek": [], "gpuobj": [] },
+      "after": { "x": [18446744073709551578, 8, 7, 6, 5, 4], "x8": 999, "nzcv": 536870912, "pc": 4612, "exception_ticks": 3, "exclusive_state": "cleared", "memory_diff": [], "virtual_syncsources": [], "virtual_objects": [], "kernel_calls": [] }
+    },
+    {
+      "name": "syncsource create scans from one and copies out lowest free id",
+      "ioctl": { "request": 3222276416, "type": 9, "number": 64, "direction": 3, "size": 16 },
+      "before": { "x": [697, 3222276416, 8192, 3, 4, 5], "x8": 29, "nzcv": 0, "pc": 4864, "exception_ticks": 0, "exclusive_state": "none", "memory": [{ "address": 8192, "bytes": "00000000000000000000000000000000" }], "virtual_syncsources": [], "virtual_objects": [] },
+      "kernel": { "valid_fds": [697], "peek": [{ "fd": 697, "min_id": 1, "result": { "kind": "ok", "value": 2, "backend": 97 } }], "gpuobj": [] },
+      "after": { "x": [0, 3222276416, 8192, 3, 4, 5], "x8": 29, "nzcv": 0, "pc": 4868, "exception_ticks": 13, "exclusive_state": "cleared", "memory_diff": [{ "pc": 4864, "address": 8192, "bytes": "02000000000000000000000000000000", "slot_mask": 0, "provenance": "service-copy-out" }], "virtual_syncsources": [2], "virtual_objects": [], "kernel_calls": [{ "operation": "peek-syncsource", "pid": 4242, "fd": 697, "min_id": 1, "request": 0, "input": "", "output": "02000000", "result": 0, "errno": 0, "backend": 97 }] }
+    },
+    {
+      "name": "syncsource create skips a local collision",
+      "ioctl": { "request": 3222276416, "type": 9, "number": 64, "direction": 3, "size": 16 },
+      "before": { "x": [697, 3222276416, 8448, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 5120, "exception_ticks": 0, "exclusive_state": "none", "memory": [{ "address": 8448, "bytes": "00000000000000000000000000000000" }], "virtual_syncsources": [2], "virtual_objects": [] },
+      "kernel": { "valid_fds": [697], "peek": [{ "fd": 697, "min_id": 1, "result": { "kind": "ok", "value": 2, "backend": 97 } }, { "fd": 697, "min_id": 3, "result": { "kind": "ok", "value": 3, "backend": 97 } }], "gpuobj": [] },
+      "after": { "x": [0, 3222276416, 8448, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 5124, "exception_ticks": 13, "exclusive_state": "cleared", "memory_diff": [{ "pc": 5120, "address": 8448, "bytes": "03000000000000000000000000000000", "slot_mask": 0, "provenance": "service-copy-out" }], "virtual_syncsources": [2, 3], "virtual_objects": [], "kernel_calls": [{ "operation": "peek-syncsource", "pid": 4242, "fd": 697, "min_id": 1, "request": 0, "input": "", "output": "02000000", "result": 0, "errno": 0, "backend": 97 }, { "operation": "peek-syncsource", "pid": 4242, "fd": 697, "min_id": 3, "request": 0, "input": "", "output": "03000000", "result": 0, "errno": 0, "backend": 97 }] }
+    },
+    {
+      "name": "short create bounds copy in and copy out to guest size",
+      "ioctl": { "request": 3221489984, "type": 9, "number": 64, "direction": 3, "size": 4 },
+      "before": { "x": [697, 3221489984, 8576, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 5248, "exception_ticks": 0, "exclusive_state": "none", "memory": [{ "address": 8576, "bytes": "ffffffff" }], "virtual_syncsources": [], "virtual_objects": [] },
+      "kernel": { "valid_fds": [697], "peek": [{ "fd": 697, "min_id": 1, "result": { "kind": "ok", "value": 2, "backend": 97 } }], "gpuobj": [] },
+      "after": { "x": [0, 3221489984, 8576, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 5252, "exception_ticks": 13, "exclusive_state": "cleared", "memory_diff": [{ "pc": 5248, "address": 8576, "bytes": "02000000", "slot_mask": 0, "provenance": "service-copy-out" }], "virtual_syncsources": [2], "virtual_objects": [], "kernel_calls": [{ "operation": "peek-syncsource", "pid": 4242, "fd": 697, "min_id": 1, "request": 0, "input": "", "output": "02000000", "result": 0, "errno": 0, "backend": 97 }] }
+    },
+    {
+      "name": "read-only create retains virtual id when copy out faults",
+      "ioctl": { "request": 2148534592, "type": 9, "number": 64, "direction": 2, "size": 16 },
+      "before": { "x": [697, 2148534592, 0, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 5376, "exception_ticks": 0, "exclusive_state": "none", "memory": [], "virtual_syncsources": [], "virtual_objects": [] },
+      "kernel": { "valid_fds": [697], "peek": [{ "fd": 697, "min_id": 1, "result": { "kind": "ok", "value": 2, "backend": 97 } }], "gpuobj": [] },
+      "after": { "x": [18446744073709551602, 2148534592, 0, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 5380, "exception_ticks": 13, "exclusive_state": "cleared", "memory_diff": [], "virtual_syncsources": [2], "virtual_objects": [], "kernel_calls": [{ "operation": "peek-syncsource", "pid": 4242, "fd": 697, "min_id": 1, "request": 0, "input": "", "output": "02000000", "result": 0, "errno": 0, "backend": 97 }] }
+    },
+    {
+      "name": "destroy invalid fd returns EBADF and preserves local state",
+      "ioctl": { "request": 3222276417, "type": 9, "number": 65, "direction": 3, "size": 16 },
+      "before": { "x": [2989, 3222276417, 8704, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 5632, "exception_ticks": 0, "exclusive_state": "none", "memory": [{ "address": 8704, "bytes": "02000000000000000000000000000000" }], "virtual_syncsources": [2], "virtual_objects": [] },
+      "kernel": { "valid_fds": [697], "validation_errors": [], "peek": [], "gpuobj": [] },
+      "after": { "x": [18446744073709551607, 3222276417, 8704, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 5636, "exception_ticks": 13, "exclusive_state": "cleared", "memory_diff": [], "virtual_syncsources": [2], "virtual_objects": [], "kernel_calls": [{ "operation": "validate-kgsl-fd", "pid": 4242, "fd": 2989, "min_id": 0, "request": 0, "input": "", "output": "", "result": -1, "errno": 9, "backend": 0 }] }
+    },
+    {
+      "name": "destroy validation infrastructure failure restores svc pc and state",
+      "ioctl": { "request": 3222276417, "type": 9, "number": 65, "direction": 3, "size": 16 },
+      "before": { "x": [3840, 3222276417, 8832, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 5760, "exception_ticks": 0, "exclusive_state": "none", "memory": [{ "address": 8832, "bytes": "02000000000000000000000000000000" }], "virtual_syncsources": [2], "virtual_objects": [] },
+      "kernel": { "valid_fds": [697], "validation_errors": [{ "fd": 3840, "result": { "kind": "infrastructure", "errno": 25, "backend": 99 } }], "peek": [], "gpuobj": [] },
+      "after": { "x": [3840, 3222276417, 8832, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 5760, "exception_ticks": 13, "exclusive_state": "cleared", "memory_diff": [], "virtual_syncsources": [2], "virtual_objects": [], "kernel_calls": [{ "operation": "validate-kgsl-fd", "pid": 4242, "fd": 3840, "min_id": 0, "request": 0, "input": "", "output": "", "result": -1, "errno": 25, "backend": 99 }] },
+      "dispatch_error": "infrastructure"
+    },
+    {
+      "name": "destroy removes only local virtual state",
+      "ioctl": { "request": 3222276417, "type": 9, "number": 65, "direction": 3, "size": 16 },
+      "before": { "x": [697, 3222276417, 8960, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 5888, "exception_ticks": 0, "exclusive_state": "none", "memory": [{ "address": 8960, "bytes": "02000000000000000000000000000000" }], "virtual_syncsources": [2, 3], "virtual_objects": [] },
+      "kernel": { "valid_fds": [697], "validation_errors": [], "peek": [], "gpuobj": [] },
+      "after": { "x": [0, 3222276417, 8960, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 5892, "exception_ticks": 13, "exclusive_state": "cleared", "memory_diff": [{ "pc": 5888, "address": 8960, "bytes": "02000000000000000000000000000000", "slot_mask": 0, "provenance": "service-copy-out" }], "virtual_syncsources": [3], "virtual_objects": [], "kernel_calls": [{ "operation": "validate-kgsl-fd", "pid": 4242, "fd": 697, "min_id": 0, "request": 0, "input": "", "output": "", "result": 0, "errno": 0, "backend": 0 }] }
+    },
+    {
+      "name": "create infrastructure failure restores svc pc",
+      "ioctl": { "request": 3222276416, "type": 9, "number": 64, "direction": 3, "size": 16 },
+      "before": { "x": [697, 3222276416, 9216, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 6144, "exception_ticks": 0, "exclusive_state": "none", "memory": [{ "address": 9216, "bytes": "00000000000000000000000000000000" }], "virtual_syncsources": [], "virtual_objects": [] },
+      "kernel": { "valid_fds": [697], "peek": [{ "fd": 697, "min_id": 1, "result": { "kind": "infrastructure", "errno": 5, "backend": 97 } }], "gpuobj": [] },
+      "after": { "x": [697, 3222276416, 9216, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 6144, "exception_ticks": 13, "exclusive_state": "cleared", "memory_diff": [], "virtual_syncsources": [], "virtual_objects": [], "kernel_calls": [{ "operation": "peek-syncsource", "pid": 4242, "fd": 697, "min_id": 1, "request": 0, "input": "", "output": "", "result": -1, "errno": 5, "backend": 97 }] },
+      "dispatch_error": "infrastructure"
+    },
+    {
+      "name": "gpuobj info uses real read-only adapter and copies out",
+      "ioctl": { "request": 3224373575, "type": 9, "number": 71, "direction": 3, "size": 48 },
+      "before": { "x": [697, 3224373575, 9472, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 6400, "exception_ticks": 0, "exclusive_state": "none", "memory": [{ "address": 9472, "bytes": "000000000000000000000000000000000000000000000000000000000000000000000000000000002a00000000000000" }], "virtual_syncsources": [], "virtual_objects": [] },
+      "kernel": { "valid_fds": [697], "peek": [], "gpuobj": [{ "fd": 697, "request": 3224373575, "result": { "kind": "ok", "value": 0, "output": "001000007100000000120000000000000020000000000000002000000000000000300000710000002a00000000000000" } }] },
+      "after": { "x": [0, 3224373575, 9472, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 6404, "exception_ticks": 13, "exclusive_state": "cleared", "memory_diff": [{ "pc": 6400, "address": 9472, "bytes": "001000007100000000120000000000000020000000000000002000000000000000300000710000002a00000000000000", "slot_mask": 0, "provenance": "service-copy-out" }], "virtual_syncsources": [], "virtual_objects": [{ "fd": 697, "id": 42, "gpuaddr": 485331308544, "size": 8192, "va_len": 8192, "va_addr": 485331316736, "memtype_override": null, "metadata": "" }], "kernel_calls": [{ "operation": "gpuobj-ioctl", "pid": 4242, "fd": 697, "min_id": 0, "request": 3224373575, "input": "000000000000000000000000000000000000000000000000000000000000000000000000000000002a00000000000000", "output": "001000007100000000120000000000000020000000000000002000000000000000300000710000002a00000000000000", "result": 0, "errno": 0, "backend": 0 }] }
+    },
+    {
+      "name": "gpuobj target errno is a handled guest result",
+      "ioctl": { "request": 3224373575, "type": 9, "number": 71, "direction": 3, "size": 48 },
+      "before": { "x": [697, 3224373575, 9600, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 6528, "exception_ticks": 0, "exclusive_state": "none", "memory": [{ "address": 9600, "bytes": "000000000000000000000000000000000000000000000000000000000000000000000000000000002a00000000000000" }], "virtual_syncsources": [], "virtual_objects": [] },
+      "kernel": { "valid_fds": [697], "peek": [], "gpuobj": [{ "fd": 697, "request": 3224373575, "result": { "kind": "guest-errno", "errno": 2, "backend": 98 } }] },
+      "after": { "x": [18446744073709551614, 3224373575, 9600, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 6532, "exception_ticks": 13, "exclusive_state": "cleared", "memory_diff": [], "virtual_syncsources": [], "virtual_objects": [], "kernel_calls": [{ "operation": "gpuobj-ioctl", "pid": 4242, "fd": 697, "min_id": 0, "request": 3224373575, "input": "000000000000000000000000000000000000000000000000000000000000000000000000000000002a00000000000000", "output": "000000000000000000000000000000000000000000000000000000000000000000000000000000002a00000000000000", "result": -1, "errno": 2, "backend": 98 }] }
+    },
+    {
+      "name": "gpuobj set info refreshes real info and shadows type locally",
+      "ioctl": { "request": 1075841356, "type": 9, "number": 76, "direction": 1, "size": 32 },
+      "before": { "x": [697, 1075841356, 9728, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 6656, "exception_ticks": 0, "exclusive_state": "none", "memory": [{ "address": 9728, "bytes": "020000000000000000000000000000002a000000000000000700000000000000" }], "virtual_syncsources": [], "virtual_objects": [] },
+      "kernel": { "valid_fds": [697], "peek": [], "gpuobj": [{ "fd": 697, "request": 3224373575, "result": { "kind": "ok", "value": 0, "output": "001000007100000000120000000000000020000000000000002000000000000000300000710000002a00000000000000" } }] },
+      "after": { "x": [0, 1075841356, 9728, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 6660, "exception_ticks": 13, "exclusive_state": "cleared", "memory_diff": [], "virtual_syncsources": [], "virtual_objects": [{ "fd": 697, "id": 42, "gpuaddr": 485331308544, "size": 8192, "va_len": 8192, "va_addr": 485331316736, "memtype_override": 7, "metadata": "" }], "kernel_calls": [{ "operation": "gpuobj-ioctl", "pid": 4242, "fd": 697, "min_id": 0, "request": 3224373575, "input": "000000000000000000000000000000000000000000000000000000000000000000000000000000002a00000000000000", "output": "001000007100000000120000000000000020000000000000002000000000000000300000710000002a00000000000000", "result": 0, "errno": 0, "backend": 0 }] }
+    },
+    {
+      "name": "process vm writev writes guest cow only",
+      "before": { "x": [4242, 12288, 1, 12304, 1, 0], "x8": 271, "nzcv": 0, "pc": 6912, "exception_ticks": 0, "exclusive_state": "none", "memory": [{ "address": 12288, "bytes": "0040000000000000040000000000000000500000000000000400000000000000" }, { "address": 16384, "bytes": "11223344" }, { "address": 20480, "bytes": "00000000" }], "virtual_syncsources": [], "virtual_objects": [] },
+      "kernel": { "valid_fds": [], "peek": [], "gpuobj": [] },
+      "after": { "x": [4, 12288, 1, 12304, 1, 0], "x8": 271, "nzcv": 0, "pc": 6916, "exception_ticks": 1, "exclusive_state": "cleared", "memory_diff": [{ "pc": 6912, "address": 20480, "bytes": "11223344", "slot_mask": 0, "provenance": "guest-cow" }], "virtual_syncsources": [], "virtual_objects": [], "kernel_calls": [] }
+    },
+    {
+      "name": "syncsource create retries EAGAIN and retains successful backend",
+      "ioctl": { "request": 3222276416, "type": 9, "number": 64, "direction": 3, "size": 16 },
+      "before": { "x": [697, 3222276416, 11264, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 7168, "exception_ticks": 0, "exclusive_state": "none", "memory": [{ "address": 11264, "bytes": "00000000000000000000000000000000" }], "virtual_syncsources": [], "virtual_objects": [] },
+      "kernel": { "valid_fds": [697], "peek": [{ "fd": 697, "min_id": 1, "result": { "kind": "guest-errno", "errno": 11, "backend": 97 } }, { "fd": 697, "min_id": 1, "result": { "kind": "guest-errno", "errno": 11, "backend": 97 } }, { "fd": 697, "min_id": 1, "result": { "kind": "ok", "value": 2, "backend": 97 } }], "gpuobj": [] },
+      "after": { "x": [0, 3222276416, 11264, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 7172, "exception_ticks": 13, "exclusive_state": "cleared", "memory_diff": [{ "pc": 7168, "address": 11264, "bytes": "02000000000000000000000000000000", "slot_mask": 0, "provenance": "service-copy-out" }], "virtual_syncsources": [2], "virtual_objects": [], "kernel_calls": [{ "operation": "peek-syncsource", "pid": 4242, "fd": 697, "min_id": 1, "request": 0, "input": "", "output": "", "result": -1, "errno": 11, "backend": 97 }, { "operation": "peek-syncsource", "pid": 4242, "fd": 697, "min_id": 1, "request": 0, "input": "", "output": "", "result": -1, "errno": 11, "backend": 97 }, { "operation": "peek-syncsource", "pid": 4242, "fd": 697, "min_id": 1, "request": 0, "input": "", "output": "02000000", "result": 0, "errno": 0, "backend": 97 }] }
+    },
+    {
+      "name": "syncsource create EAGAIN exhaustion restores svc pc",
+      "ioctl": { "request": 3222276416, "type": 9, "number": 64, "direction": 3, "size": 16 },
+      "before": { "x": [697, 3222276416, 11520, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 7424, "exception_ticks": 0, "exclusive_state": "none", "memory": [{ "address": 11520, "bytes": "00000000000000000000000000000000" }], "virtual_syncsources": [], "virtual_objects": [] },
+      "kernel": { "valid_fds": [697], "peek": [{ "fd": 697, "min_id": 1, "result": { "kind": "guest-errno", "errno": 11, "backend": 97 } }, { "fd": 697, "min_id": 1, "result": { "kind": "guest-errno", "errno": 11, "backend": 97 } }, { "fd": 697, "min_id": 1, "result": { "kind": "guest-errno", "errno": 11, "backend": 97 } }], "gpuobj": [] },
+      "after": { "x": [697, 3222276416, 11520, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 7424, "exception_ticks": 13, "exclusive_state": "cleared", "memory_diff": [], "virtual_syncsources": [], "virtual_objects": [], "kernel_calls": [{ "operation": "peek-syncsource", "pid": 4242, "fd": 697, "min_id": 1, "request": 0, "input": "", "output": "", "result": -1, "errno": 11, "backend": 97 }, { "operation": "peek-syncsource", "pid": 4242, "fd": 697, "min_id": 1, "request": 0, "input": "", "output": "", "result": -1, "errno": 11, "backend": 97 }, { "operation": "peek-syncsource", "pid": 4242, "fd": 697, "min_id": 1, "request": 0, "input": "", "output": "", "result": -1, "errno": 11, "backend": 97 }] },
+      "dispatch_error": "infrastructure",
+      "dispatch_error_backend": 97
+    },
+    {
+      "name": "syncsource protocol error retains successful peek backend",
+      "ioctl": { "request": 3222276416, "type": 9, "number": 64, "direction": 3, "size": 16 },
+      "before": { "x": [697, 3222276416, 11776, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 7680, "exception_ticks": 0, "exclusive_state": "none", "memory": [{ "address": 11776, "bytes": "00000000000000000000000000000000" }], "virtual_syncsources": [], "virtual_objects": [] },
+      "kernel": { "valid_fds": [697], "peek": [{ "fd": 697, "min_id": 1, "result": { "kind": "ok", "value": 0, "backend": 97 } }], "gpuobj": [] },
+      "after": { "x": [697, 3222276416, 11776, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 7680, "exception_ticks": 13, "exclusive_state": "cleared", "memory_diff": [], "virtual_syncsources": [], "virtual_objects": [], "kernel_calls": [{ "operation": "peek-syncsource", "pid": 4242, "fd": 697, "min_id": 1, "request": 0, "input": "", "output": "00000000", "result": 0, "errno": 0, "backend": 97 }] },
+      "dispatch_error": "infrastructure",
+      "dispatch_error_backend": 97
+    },
+    {
+      "name": "wrong ioctl type with create number still dispatches by number",
+      "ioctl": { "request": 3222306624, "type": 127, "number": 64, "direction": 3, "size": 16 },
+      "before": { "x": [697, 3222306624, 12032, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 7936, "exception_ticks": 0, "exclusive_state": "none", "memory": [{ "address": 12032, "bytes": "00000000000000000000000000000000" }], "virtual_syncsources": [], "virtual_objects": [] },
+      "kernel": { "valid_fds": [697], "peek": [{ "fd": 697, "min_id": 1, "result": { "kind": "ok", "value": 2, "backend": 97 } }], "gpuobj": [] },
+      "after": { "x": [0, 3222306624, 12032, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 7940, "exception_ticks": 13, "exclusive_state": "cleared", "memory_diff": [{ "pc": 7936, "address": 12032, "bytes": "02000000000000000000000000000000", "slot_mask": 0, "provenance": "service-copy-out" }], "virtual_syncsources": [2], "virtual_objects": [], "kernel_calls": [{ "operation": "peek-syncsource", "pid": 4242, "fd": 697, "min_id": 1, "request": 0, "input": "", "output": "02000000", "result": 0, "errno": 0, "backend": 97 }] }
+    },
+    {
+      "name": "process vm writev rejects a single remote iovec before any prefix write",
+      "before": { "x": [4242, 12288, 1, 12304, 1, 0], "x8": 271, "nzcv": 0, "pc": 8192, "exception_ticks": 0, "exclusive_state": "none", "memory": [{ "address": 12288, "bytes": "0040000000000000041000000000000000600000000000000410000000000000" }, { "address": 16384, "fill": 90, "size": 4100 }, { "address": 24576, "bytes": "00" }], "virtual_syncsources": [], "virtual_objects": [] },
+      "kernel": { "valid_fds": [], "peek": [], "gpuobj": [] },
+      "after": { "x": [18446744073709551602, 12288, 1, 12304, 1, 0], "x8": 271, "nzcv": 0, "pc": 8196, "exception_ticks": 1, "exclusive_state": "cleared", "memory_diff": [], "virtual_syncsources": [], "virtual_objects": [], "kernel_calls": [] }
+    },
+    {
+      "name": "process vm writev partial success stops at complete remote iovec boundary",
+      "before": { "x": [4242, 12288, 1, 12304, 2, 0], "x8": 271, "nzcv": 0, "pc": 8448, "exception_ticks": 0, "exclusive_state": "none", "memory": [{ "address": 12288, "bytes": "004000000000000008100000000000000050000000000000040000000000000000600000000000000410000000000000" }, { "address": 16384, "fill": 90, "size": 4104 }, { "address": 20480, "bytes": "00000000" }, { "address": 24576, "bytes": "00" }], "virtual_syncsources": [], "virtual_objects": [] },
+      "kernel": { "valid_fds": [], "peek": [], "gpuobj": [] },
+      "after": { "x": [4, 12288, 1, 12304, 2, 0], "x8": 271, "nzcv": 0, "pc": 8452, "exception_ticks": 1, "exclusive_state": "cleared", "memory_diff": [{ "pc": 8448, "address": 20480, "bytes": "5a5a5a5a", "slot_mask": 0, "provenance": "guest-cow" }], "virtual_syncsources": [], "virtual_objects": [], "kernel_calls": [] }
+    },
+    {
+      "name": "process vm writev preflights a local iovec larger than one MiB in pages",
+      "before": { "x": [4242, 12288, 1, 12304, 1, 0], "x8": 271, "nzcv": 0, "pc": 8704, "exception_ticks": 0, "exclusive_state": "none", "memory": [{ "address": 12288, "bytes": "0000100000000000010010000000000000003000000000000100000000000000" }, { "address": 1048576, "fill": 65, "size": 1048576 }, { "address": 2097152, "bytes": "41" }, { "address": 3145728, "bytes": "00" }], "virtual_syncsources": [], "virtual_objects": [] },
+      "kernel": { "valid_fds": [], "peek": [], "gpuobj": [] },
+      "after": { "x": [1, 12288, 1, 12304, 1, 0], "x8": 271, "nzcv": 0, "pc": 8708, "exception_ticks": 1, "exclusive_state": "cleared", "memory_diff": [{ "pc": 8704, "address": 3145728, "bytes": "41", "slot_mask": 0, "provenance": "guest-cow" }], "virtual_syncsources": [], "virtual_objects": [], "kernel_calls": [] }
+    },
+    {
+      "name": "gpuobj set info stores sanitized metadata",
+      "ioctl": { "request": 1075841356, "type": 9, "number": 76, "direction": 1, "size": 32 },
+      "before": { "x": [697, 1075841356, 10240, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 8960, "exception_ticks": 0, "exclusive_state": "none", "memory": [{ "address": 10240, "bytes": "010000000000000000290000000000002a000000080000000000000000000000" }, { "address": 10496, "bytes": "41421f4344005a5a" }], "virtual_syncsources": [], "virtual_objects": [] },
+      "kernel": { "valid_fds": [697], "peek": [], "gpuobj": [{ "fd": 697, "request": 3224373575, "result": { "kind": "ok", "value": 0, "output": "001000007100000000120000000000000020000000000000002000000000000000300000710000002a00000000000000" } }] },
+      "after": { "x": [0, 1075841356, 10240, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 8964, "exception_ticks": 13, "exclusive_state": "cleared", "memory_diff": [], "virtual_syncsources": [], "virtual_objects": [{ "fd": 697, "id": 42, "gpuaddr": 485331308544, "size": 8192, "va_len": 8192, "va_addr": 485331316736, "memtype_override": null, "metadata": "41423f4344005a5a" }], "kernel_calls": [{ "operation": "gpuobj-ioctl", "pid": 4242, "fd": 697, "min_id": 0, "request": 3224373575, "input": "000000000000000000000000000000000000000000000000000000000000000000000000000000002a00000000000000", "output": "001000007100000000120000000000000020000000000000002000000000000000300000710000002a00000000000000", "result": 0, "errno": 0, "backend": 0 }] }
+    },
+    {
+      "name": "gpuobj set info null metadata clears shadow even when zero page is readable",
+      "ioctl": { "request": 1075841356, "type": 9, "number": 76, "direction": 1, "size": 32 },
+      "before": { "x": [697, 1075841356, 10752, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 9216, "exception_ticks": 0, "exclusive_state": "none", "memory": [{ "address": 0, "bytes": "41424344" }, { "address": 10752, "bytes": "010000000000000000000000000000002a000000040000000000000000000000" }], "virtual_syncsources": [], "virtual_objects": [{ "fd": 697, "id": 42, "gpuaddr": 485331308544, "size": 8192, "va_len": 8192, "va_addr": 485331316736, "memtype_override": null, "metadata": "6f6c64" }] },
+      "kernel": { "valid_fds": [697], "peek": [], "gpuobj": [{ "fd": 697, "request": 3224373575, "result": { "kind": "ok", "value": 0, "output": "001000007100000000120000000000000020000000000000002000000000000000300000710000002a00000000000000" } }] },
+      "after": { "x": [0, 1075841356, 10752, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 9220, "exception_ticks": 13, "exclusive_state": "cleared", "memory_diff": [], "virtual_syncsources": [], "virtual_objects": [{ "fd": 697, "id": 42, "gpuaddr": 485331308544, "size": 8192, "va_len": 8192, "va_addr": 485331316736, "memtype_override": null, "metadata": "" }], "kernel_calls": [{ "operation": "gpuobj-ioctl", "pid": 4242, "fd": 697, "min_id": 0, "request": 3224373575, "input": "000000000000000000000000000000000000000000000000000000000000000000000000000000002a00000000000000", "output": "001000007100000000120000000000000020000000000000002000000000000000300000710000002a00000000000000", "result": 0, "errno": 0, "backend": 0 }] }
+    },
+    {
+      "name": "gpuobj set info nested pointer fault clears metadata but succeeds",
+      "ioctl": { "request": 1075841356, "type": 9, "number": 76, "direction": 1, "size": 32 },
+      "before": { "x": [697, 1075841356, 11008, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 9472, "exception_ticks": 0, "exclusive_state": "none", "memory": [{ "address": 11008, "bytes": "01000000000000000000adde000000002a000000080000000000000000000000" }], "virtual_syncsources": [], "virtual_objects": [{ "fd": 697, "id": 42, "gpuaddr": 485331308544, "size": 8192, "va_len": 8192, "va_addr": 485331316736, "memtype_override": null, "metadata": "6f6c64" }] },
+      "kernel": { "valid_fds": [697], "peek": [], "gpuobj": [{ "fd": 697, "request": 3224373575, "result": { "kind": "ok", "value": 0, "output": "001000007100000000120000000000000020000000000000002000000000000000300000710000002a00000000000000" } }] },
+      "after": { "x": [0, 1075841356, 11008, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 9476, "exception_ticks": 13, "exclusive_state": "cleared", "memory_diff": [], "virtual_syncsources": [], "virtual_objects": [{ "fd": 697, "id": 42, "gpuaddr": 485331308544, "size": 8192, "va_len": 8192, "va_addr": 485331316736, "memtype_override": null, "metadata": "" }], "kernel_calls": [{ "operation": "gpuobj-ioctl", "pid": 4242, "fd": 697, "min_id": 0, "request": 3224373575, "input": "000000000000000000000000000000000000000000000000000000000000000000000000000000002a00000000000000", "output": "001000007100000000120000000000000020000000000000002000000000000000300000710000002a00000000000000", "result": 0, "errno": 0, "backend": 0 }] }
+    },
+    {
+      "name": "service copy out overlapping publication slot remains unauthorized service provenance",
+      "ioctl": { "request": 3222276416, "type": 9, "number": 64, "direction": 3, "size": 16 },
+      "before": { "x": [697, 3222276416, 12288, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 9728, "exception_ticks": 0, "exclusive_state": "none", "memory": [{ "address": 12288, "bytes": "00000000000000000000000000000000" }], "virtual_syncsources": [], "virtual_objects": [], "publication_slot": 12288 },
+      "kernel": { "valid_fds": [697], "peek": [{ "fd": 697, "min_id": 1, "result": { "kind": "ok", "value": 2, "backend": 97 } }], "gpuobj": [] },
+      "after": { "x": [0, 3222276416, 12288, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 9732, "exception_ticks": 13, "exclusive_state": "cleared", "memory_diff": [{ "pc": 9728, "address": 12288, "bytes": "02000000000000000000000000000000", "slot_mask": 255, "provenance": "service-copy-out" }], "virtual_syncsources": [2], "virtual_objects": [], "kernel_calls": [{ "operation": "peek-syncsource", "pid": 4242, "fd": 697, "min_id": 1, "request": 0, "input": "", "output": "02000000", "result": 0, "errno": 0, "backend": 97 }] }
+    },
+    {
+      "name": "syncsource infrastructure EAGAIN is not retried as guest contention",
+      "ioctl": { "request": 3222276416, "type": 9, "number": 64, "direction": 3, "size": 16 },
+      "before": { "x": [697, 3222276416, 12544, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 9984, "exception_ticks": 0, "exclusive_state": "none", "memory": [{ "address": 12544, "bytes": "00000000000000000000000000000000" }], "virtual_syncsources": [], "virtual_objects": [] },
+      "kernel": { "valid_fds": [697], "peek": [{ "fd": 697, "min_id": 1, "result": { "kind": "infrastructure", "errno": 11, "backend": 99 } }], "gpuobj": [] },
+      "after": { "x": [697, 3222276416, 12544, 0, 0, 0], "x8": 29, "nzcv": 0, "pc": 9984, "exception_ticks": 13, "exclusive_state": "cleared", "memory_diff": [], "virtual_syncsources": [], "virtual_objects": [], "kernel_calls": [{ "operation": "peek-syncsource", "pid": 4242, "fd": 697, "min_id": 1, "request": 0, "input": "", "output": "", "result": -1, "errno": 11, "backend": 99 }] },
+      "dispatch_error": "infrastructure",
+      "dispatch_error_backend": 99
+    },
+    {
+      "name": "process vm writev snapshots aliased local and remote descriptor tables",
+      "before": { "x": [4242, 12288, 2, 12320, 2, 0], "x8": 271, "nzcv": 0, "pc": 10240, "exception_ticks": 0, "exclusive_state": "none", "memory": [{ "address": 12288, "bytes": "00400000000000003000000000000000004100000000000004000000000000001030000000000000300000000000000000500000000000000400000000000000" }, { "address": 16384, "bytes": "004200000000000004000000000000000070000000000000300000000000000000600000000000000400000000000000" }, { "address": 16640, "bytes": "aabbccdd" }, { "address": 16896, "bytes": "11223344" }, { "address": 20480, "bytes": "00000000" }, { "address": 24576, "bytes": "00000000" }], "virtual_syncsources": [], "virtual_objects": [] },
+      "kernel": { "valid_fds": [], "peek": [], "gpuobj": [] },
+      "after": { "x": [52, 12288, 2, 12320, 2, 0], "x8": 271, "nzcv": 0, "pc": 10244, "exception_ticks": 1, "exclusive_state": "cleared", "memory_diff": [{ "pc": 10240, "address": 12304, "bytes": "004200000000000004000000000000000070000000000000300000000000000000600000000000000400000000000000", "slot_mask": 0, "provenance": "guest-cow" }, { "pc": 10240, "address": 20480, "bytes": "aabbccdd", "slot_mask": 0, "provenance": "guest-cow" }], "virtual_syncsources": [], "virtual_objects": [], "kernel_calls": [] }
+    }
+  ]
+}

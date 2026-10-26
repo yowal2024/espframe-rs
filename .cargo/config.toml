@@ -1,0 +1,9 @@
+[env]
+# cc-rs otherwise adds an explicit shared C++ dependency for Android builds.
+CXXSTDLIB_aarch64_linux_android = { value = "c++_static", force = true }
+
+[target.aarch64-linux-android]
+rustflags = [
+    "-C", "force-unwind-tables=no",
+    "-C", "link-arg=-static-libstdc++",
+]
