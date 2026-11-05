@@ -16,59 +16,44 @@ const ALLOWED_FLAGS: u16 = (1 << 1) | (1 << 2) | (1 << 11);
 const LOCAL_HEADER_SIZE: usize = 30;
 const CENTRAL_HEADER_SIZE: usize = 46;
 const EOCD_SIZE: usize = 22;
-const MAX_ARCHIVE_SIZE: usize = 128 * 1024 * 1024;
+pub const MAX_ARCHIVE_SIZE: usize = 128 * 1024 * 1024;
+const MAX_ENTRY_SIZE: usize = 256 * 1024 * 1024;
 const INFLATE_CHUNK_SIZE: usize = 64 * 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DfcolZipModel {
     pub map_name: &'static str,
     pub entry_name: &'static str,
-    pub raw_size: u32,
-    pub raw_crc32: u32,
 }
 
 const MODELS: [DfcolZipModel; 7] = [
     DfcolZipModel {
         map_name: "AZ-5",
         entry_name: "AZ-5.dfcol",
-        raw_size: 46_847_114,
-        raw_crc32: 0x543c_576d,
     },
     DfcolZipModel {
         map_name: "Brakkesh",
         entry_name: "Brakkesh.dfcol",
-        raw_size: 13_841_982,
-        raw_crc32: 0x5869_5c48,
     },
     DfcolZipModel {
         map_name: "Dam_Iris",
         entry_name: "Dam_Iris.dfcol",
-        raw_size: 20_652_666,
-        raw_crc32: 0x2206_bf69,
     },
     DfcolZipModel {
         map_name: "Forrest",
         entry_name: "Forrest.dfcol",
-        raw_size: 41_086_024,
-        raw_crc32: 0xa6dc_baba,
     },
     DfcolZipModel {
         map_name: "SecretService",
         entry_name: "SecretService.dfcol",
-        raw_size: 1_207_808,
-        raw_crc32: 0x6df1_b376,
     },
     DfcolZipModel {
         map_name: "SpaceCenter",
         entry_name: "SpaceCenter.dfcol",
-        raw_size: 17_613_240,
-        raw_crc32: 0x1b93_8b5c,
     },
     DfcolZipModel {
         map_name: "Tide",
         entry_name: "Tide.dfcol",
-        raw_size: 29_299_486,
-        raw_crc32: 0x62c5_4142,
     },
 ];
 
@@ -181,11 +166,6 @@ impl<'a> DfcolArchive<'a> {
                     "entry uses an invalid or ZIP64 size/offset",
                 ));
             }
-            if extra_length != 0 {
-                return Err(DfcolError::new(
-                    "ZIP extra fields (including ZIP64) are rejected",
-                ));
-            }
             if comment_length != 0 {
                 return Err(DfcolError::new("ZIP entry comments are unsupported"));
             }
@@ -203,18 +183,17 @@ impl<'a> DfcolArchive<'a> {
             }
             let name_start = cursor + CENTRAL_HEADER_SIZE;
             let name = &bytes[name_start..name_start + name_length];
+            validate_extra_fields(
+                &bytes[name_start + name_length..name_start + name_length + extra_length],
+            )?;
             let model_index = find_model_bytes(name)
                 .ok_or_else(|| DfcolError::new("ZIP has an unknown or unsafe entry name"))?;
             if seen[model_index] {
                 return Err(DfcolError::new("ZIP has a duplicate entry name"));
             }
             seen[model_index] = true;
-            let model = MODELS[model_index];
-            if raw_size != model.raw_size {
-                return Err(DfcolError::new("entry raw size does not match catalog"));
-            }
-            if crc32 != model.raw_crc32 {
-                return Err(DfcolError::new("entry CRC does not match catalog"));
+            if raw_size == 0 || raw_size as usize > MAX_ENTRY_SIZE {
+                return Err(DfcolError::new("entry exceeds the uncompressed size limit"));
             }
             entries[model_index] = Entry {
                 local_header_offset,
@@ -261,27 +240,29 @@ impl<'a> DfcolArchive<'a> {
             if name_length != model.entry_name.len() {
                 return Err(DfcolError::new("local ZIP entry name length differs"));
             }
-            if extra_length != 0 {
-                return Err(DfcolError::new("local ZIP extra fields are rejected"));
-            }
-            let data_offset = local_offset
+            let extra_offset = local_offset
                 .checked_add(LOCAL_HEADER_SIZE)
                 .and_then(|value| value.checked_add(name_length))
                 .ok_or_else(|| DfcolError::new("local ZIP entry offset overflow"))?;
+            let data_offset = extra_offset
+                .checked_add(extra_length)
+                .ok_or_else(|| DfcolError::new("local ZIP extra field range overflow"))?;
             if !in_range(
                 local_offset + LOCAL_HEADER_SIZE,
                 name_length,
                 central_offset,
-            ) || !in_range(data_offset, entry.compressed_size as usize, central_offset)
+            ) || !in_range(extra_offset, extra_length, central_offset)
+                || !in_range(data_offset, entry.compressed_size as usize, central_offset)
             {
                 return Err(DfcolError::new("local ZIP entry data is truncated"));
             }
-            if bytes[local_offset + LOCAL_HEADER_SIZE..data_offset] != *model.entry_name.as_bytes()
+            if bytes[local_offset + LOCAL_HEADER_SIZE..extra_offset] != *model.entry_name.as_bytes()
             {
                 return Err(DfcolError::new(
                     "local ZIP entry name differs from central directory",
                 ));
             }
+            validate_extra_fields(&bytes[extra_offset..data_offset])?;
             entry.data_offset = data_offset as u32;
         }
 
@@ -322,25 +303,14 @@ impl<'a> DfcolArchive<'a> {
         MODELS.len()
     }
 
-    pub fn Inflate(
-        &self,
-        entry_name: &str,
-        expected_raw_size: usize,
-    ) -> Result<Vec<u8>, DfcolError> {
+    pub fn Inflate(&self, entry_name: &str) -> Result<Vec<u8>, DfcolError> {
         if !self.valid {
             return Err(DfcolError::new("ZIP archive view is not valid"));
         }
         let model_index = find_model(entry_name)
             .ok_or_else(|| DfcolError::new("requested ZIP entry is unknown"))?;
-        let model = MODELS[model_index];
         let entry = self.entries[model_index];
-        if expected_raw_size != model.raw_size as usize
-            || expected_raw_size != entry.raw_size as usize
-        {
-            return Err(DfcolError::new(
-                "requested raw size does not match the fixed catalog",
-            ));
-        }
+        let expected_raw_size = entry.raw_size as usize;
         let start = entry.data_offset as usize;
         let end = start
             .checked_add(entry.compressed_size as usize)
@@ -351,7 +321,11 @@ impl<'a> DfcolArchive<'a> {
             ));
         }
 
-        let mut output = vec![0u8; expected_raw_size];
+        let mut output = Vec::new();
+        output
+            .try_reserve_exact(expected_raw_size)
+            .map_err(|_| DfcolError::new("unable to allocate ZIP entry"))?;
+        output.resize(expected_raw_size, 0);
         let mut overflow = [0u8; 1];
         // false selects a raw DEFLATE stream, matching inflateInit2(-MAX_WBITS).
         let mut decoder = Decompress::new(false);
@@ -379,7 +353,7 @@ impl<'a> DfcolArchive<'a> {
                 .decompress(&input[consumed..input_end], destination, flush)
                 .map_err(|_| DfcolError::new("DEFLATE stream is invalid"))?;
             if decoder.total_out() as usize > expected_raw_size {
-                return Err(DfcolError::new("DEFLATE output exceeds the catalog size"));
+                return Err(DfcolError::new("DEFLATE output exceeds the ZIP entry size"));
             }
             if status == Status::StreamEnd {
                 break status;
@@ -405,6 +379,28 @@ impl<'a> DfcolArchive<'a> {
         }
         Ok(output)
     }
+}
+
+fn validate_extra_fields(bytes: &[u8]) -> Result<(), DfcolError> {
+    let mut cursor = 0;
+    while cursor < bytes.len() {
+        if !in_range(cursor, 4, bytes.len()) {
+            return Err(DfcolError::new("ZIP extra field header is truncated"));
+        }
+        let kind = read_u16(bytes, cursor)?;
+        let length = read_u16(bytes, cursor + 2)? as usize;
+        cursor += 4;
+        if !in_range(cursor, length, bytes.len()) {
+            return Err(DfcolError::new("ZIP extra field data is truncated"));
+        }
+        if kind == 0x0001 {
+            return Err(DfcolError::new("ZIP64 extra fields are unsupported"));
+        }
+        // Timestamps and other metadata do not affect ZIP32 names, sizes or data.
+        // Never use an extra field to override the validated canonical filename.
+        cursor += length;
+    }
+    Ok(())
 }
 
 fn find_model(name: &str) -> Option<usize> {

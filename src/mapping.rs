@@ -3,7 +3,7 @@
 use std::ffi::c_void;
 use std::ptr::NonNull;
 
-use crate::physics::dfcol::{PackBytes, PACK_STORED_BYTES};
+use crate::physics::dfcol::{PackBytes, MAX_ARCHIVE_SIZE};
 
 const PAGE_SIZE: usize = 4096;
 
@@ -42,7 +42,11 @@ impl OwnedReadOnlyMapping {
         let ptr = NonNull::new(mapping.cast::<u8>()).ok_or(MappingError::InvalidAddress)?;
         let stored_size = usize::try_from(stored_size).map_err(|_| MappingError::InvalidRange)?;
         let mapped_size = usize::try_from(mapped_size).map_err(|_| MappingError::InvalidRange)?;
-        if stored_size != PACK_STORED_BYTES || mapped_size == 0 || stored_size > mapped_size {
+        if stored_size == 0
+            || stored_size > MAX_ARCHIVE_SIZE
+            || mapped_size == 0
+            || stored_size > mapped_size
+        {
             return Err(MappingError::InvalidRange);
         }
         if !(ptr.as_ptr() as usize).is_multiple_of(PAGE_SIZE)

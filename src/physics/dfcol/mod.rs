@@ -40,9 +40,9 @@ impl From<&str> for DfcolError {
     }
 }
 
-pub use archive::{DfcolArchive, DfcolZipModel, DfcolZipModels};
+pub use archive::{DfcolArchive, DfcolZipModel, DfcolZipModels, MAX_ARCHIVE_SIZE};
 pub use format::DfcolHeader;
-pub use registry::{DfcolRegistry, PackBytes, PackStatus, PACK_STORED_BYTES};
+pub use registry::{DfcolRegistry, PackBytes, PackStatus};
 pub use scene::{Scene, SceneStats};
 pub use upload::{
     DfcolCall, DfcolError as UploadContractError, DfcolUploadError, DfcolUploader,

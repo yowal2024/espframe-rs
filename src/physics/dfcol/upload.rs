@@ -12,7 +12,7 @@ use crate::inject::{
 };
 use crate::kernel::KernelTransport;
 
-const EXPECTED_ZIP_SIZE: u64 = 81_894_203;
+use super::MAX_ARCHIVE_SIZE;
 const PAGE_SIZE: u64 = 4096;
 const CHUNK_SIZE: usize = 1024 * 1024;
 const MIN_REMOTE_ADDRESS: usize = 1_usize << 38;
@@ -553,7 +553,7 @@ impl<R: RemoteCalls, M: MemoryWriter> Drop for RemoteMapping<'_, R, M> {
 }
 
 fn validate_archive(archive: &[u8]) -> Result<(), DfcolUploadError> {
-    if archive.len() as u64 != EXPECTED_ZIP_SIZE {
+    if archive.is_empty() || archive.len() > MAX_ARCHIVE_SIZE {
         return Err(DfcolUploadError::InvalidArchiveSize);
     }
     if archive.get(..4) != Some(b"PK\x03\x04") {
@@ -580,7 +580,7 @@ fn read_archive(path: &Path) -> Result<Vec<u8>, DfcolUploadError> {
         const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
         options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
     }
-    let mut file = options.open(path)?;
+    let file = options.open(path)?;
     let metadata = file.metadata()?;
     #[cfg(windows)]
     {
@@ -589,11 +589,12 @@ fn read_archive(path: &Path) -> Result<Vec<u8>, DfcolUploadError> {
             return Err(DfcolUploadError::InvalidArchiveSize);
         }
     }
-    if !metadata.is_file() || metadata.len() != EXPECTED_ZIP_SIZE {
+    if !metadata.is_file() || metadata.len() == 0 || metadata.len() > MAX_ARCHIVE_SIZE as u64 {
         return Err(DfcolUploadError::InvalidArchiveSize);
     }
-    let mut bytes = Vec::with_capacity(EXPECTED_ZIP_SIZE as usize);
-    file.read_to_end(&mut bytes)?;
+    let mut bytes = Vec::with_capacity(metadata.len() as usize);
+    file.take(MAX_ARCHIVE_SIZE as u64 + 1)
+        .read_to_end(&mut bytes)?;
     Ok(bytes)
 }
 

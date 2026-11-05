@@ -84,15 +84,20 @@ impl DfcolHeader {
         {
             return Err(DfcolError::new("DFCOL physical size mismatch"));
         }
-        let mut hasher = Hasher::new();
-        hasher.update(&bytes[..60]);
-        if hasher.finalize() != header.header_crc32 {
-            return Err(DfcolError::new("header CRC32 mismatch"));
-        }
-        let mut payload_hasher = Hasher::new();
-        payload_hasher.update(&bytes[HEADER_SIZE..]);
-        if payload_hasher.finalize() != header.payload_crc32 {
-            return Err(DfcolError::new("payload CRC32 mismatch"));
+        // Some exporters leave both internal checksums unset. The enclosing ZIP
+        // still verifies the entire entry, including this header, before loading.
+        // If either checksum is supplied, validate both as in the original format.
+        if header.header_crc32 != 0 || header.payload_crc32 != 0 {
+            let mut hasher = Hasher::new();
+            hasher.update(&bytes[..60]);
+            if hasher.finalize() != header.header_crc32 {
+                return Err(DfcolError::new("header CRC32 mismatch"));
+            }
+            let mut payload_hasher = Hasher::new();
+            payload_hasher.update(&bytes[HEADER_SIZE..]);
+            if payload_hasher.finalize() != header.payload_crc32 {
+                return Err(DfcolError::new("payload CRC32 mismatch"));
+            }
         }
         let minimum_bytes = u64::from(header.triangle_meshes) * 12
             + u64::from(header.height_fields) * 24

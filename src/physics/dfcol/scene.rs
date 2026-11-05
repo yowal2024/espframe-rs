@@ -108,6 +108,7 @@ struct Mat3 {
 }
 
 impl Mat3 {
+    #[cfg(test)]
     fn identity() -> Self {
         Self {
             c0: Vec3::new(1.0, 0.0, 0.0),
@@ -589,13 +590,11 @@ impl Scene {
                         &convexes[id]
                     };
                     let scale = geometry_scale;
+                    // Signed scales represent mirrored instances. The affine inverse
+                    // and two-sided triangle queries handle them for both mesh kinds.
                     if [scale.x, scale.y, scale.z]
                         .iter()
                         .any(|value| value.abs() < 1.0e-6 || value.abs() > 1.0e6)
-                        || (raw_type == 3
-                            && [scale.x, scale.y, scale.z]
-                                .iter()
-                                .any(|value| *value <= 0.0))
                     {
                         return Err(DfcolError::new(format!(
                             "offset {}: invalid mesh scale",
@@ -609,34 +608,46 @@ impl Scene {
                     if geometry_scale.x < 1.0e-8
                         || geometry_scale.z < 1.0e-8
                         || geometry_scale.y < 0.0001 / 65535.0
-                        || !nearly_equal(geometry_scale.x, field.column_scale)
-                        || !nearly_equal(geometry_scale.y, field.height_scale)
-                        || !nearly_equal(geometry_scale.z, field.row_scale)
                         || !identity_rotation(scale_rotation)
                     {
                         return Err(DfcolError::new(format!(
-                            "offset {}: height-field scale integrity mismatch",
+                            "offset {}: invalid height-field instance scale",
                             record + 32
                         )));
                     }
-                    (field.bounds, Mat3::identity())
+                    // Records store (column, height, row), while the sampled geometry
+                    // uses local X for rows and Z for columns. Replace the pool scale
+                    // with the instance scale without applying either one twice.
+                    let scale = Mat3 {
+                        c0: Vec3::new(geometry_scale.z / field.row_scale, 0.0, 0.0),
+                        c1: Vec3::new(0.0, geometry_scale.y / field.height_scale, 0.0),
+                        c2: Vec3::new(0.0, 0.0, geometry_scale.x / field.column_scale),
+                    };
+                    (field.bounds, scale)
                 }
                 GeometryRef::Box(id) => {
                     let extents = boxes[id];
-                    if !nearly_equal(geometry_scale.x, extents.x)
-                        || !nearly_equal(geometry_scale.y, extents.y)
-                        || !nearly_equal(geometry_scale.z, extents.z)
+                    if geometry_scale.x <= 0.0
+                        || geometry_scale.y <= 0.0
+                        || geometry_scale.z <= 0.0
                         || !identity_rotation(scale_rotation)
                     {
                         return Err(DfcolError::new(format!(
-                            "offset {}: box extent integrity mismatch",
+                            "offset {}: invalid box instance extents",
                             record + 32
                         )));
                     }
                     let mut bounds = Aabb::empty();
                     bounds.include(extents * -1.0);
                     bounds.include(extents);
-                    (bounds, Mat3::identity())
+                    // Exported box instances may share a geometry ID while storing
+                    // different half extents. Transform the shared box to this instance.
+                    let scale = Mat3 {
+                        c0: Vec3::new(geometry_scale.x / extents.x, 0.0, 0.0),
+                        c1: Vec3::new(0.0, geometry_scale.y / extents.y, 0.0),
+                        c2: Vec3::new(0.0, 0.0, geometry_scale.z / extents.z),
+                    };
+                    (bounds, scale)
                 }
             };
             let actor_matrix = rotation_matrix(actor_rotation);
@@ -1137,11 +1148,6 @@ fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
         a[2] * b[0] - a[0] * b[2],
         a[0] * b[1] - a[1] * b[0],
     ]
-}
-
-fn nearly_equal(left: f32, right: f32) -> bool {
-    let tolerance = 1.0e-6f32.max(left.abs().max(right.abs()) * 1.0e-5);
-    (left - right).abs() <= tolerance
 }
 
 fn identity_rotation(rotation: Quat) -> bool {

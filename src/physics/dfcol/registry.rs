@@ -9,8 +9,6 @@ use crate::math::Vec3;
 
 use super::{DfcolArchive, DfcolZipModels, Scene};
 
-pub const PACK_STORED_BYTES: usize = 81_894_203;
-
 pub trait PackBytes: Send + Sync {
     fn Bytes(&self) -> &[u8];
 }
@@ -35,9 +33,7 @@ impl SceneLoader for RealSceneLoader {
             .iter()
             .find(|model| model.map_name == map_name)?;
         let archive = DfcolArchive::Open(pack.Bytes()).ok()?;
-        let bytes = archive
-            .Inflate(model.entry_name, model.raw_size as usize)
-            .ok()?;
+        let bytes = archive.Inflate(model.entry_name).ok()?;
         Scene::Load(&bytes, model.map_name).ok()
     }
 }
@@ -633,9 +629,9 @@ mod tests {
             bytes.extend_from_slice(&8u16.to_le_bytes());
             bytes.extend_from_slice(&0u16.to_le_bytes());
             bytes.extend_from_slice(&0u16.to_le_bytes());
-            bytes.extend_from_slice(&model.raw_crc32.to_le_bytes());
+            bytes.extend_from_slice(&0u32.to_le_bytes());
             bytes.extend_from_slice(&2u32.to_le_bytes());
-            bytes.extend_from_slice(&model.raw_size.to_le_bytes());
+            bytes.extend_from_slice(&1u32.to_le_bytes());
             bytes.extend_from_slice(&(model.entry_name.len() as u16).to_le_bytes());
             bytes.extend_from_slice(&0u16.to_le_bytes());
             bytes.extend_from_slice(model.entry_name.as_bytes());
@@ -650,9 +646,9 @@ mod tests {
             bytes.extend_from_slice(&8u16.to_le_bytes());
             bytes.extend_from_slice(&0u16.to_le_bytes());
             bytes.extend_from_slice(&0u16.to_le_bytes());
-            bytes.extend_from_slice(&model.raw_crc32.to_le_bytes());
+            bytes.extend_from_slice(&0u32.to_le_bytes());
             bytes.extend_from_slice(&2u32.to_le_bytes());
-            bytes.extend_from_slice(&model.raw_size.to_le_bytes());
+            bytes.extend_from_slice(&1u32.to_le_bytes());
             bytes.extend_from_slice(&(model.entry_name.len() as u16).to_le_bytes());
             bytes.extend_from_slice(&0u16.to_le_bytes());
             bytes.extend_from_slice(&0u16.to_le_bytes());
