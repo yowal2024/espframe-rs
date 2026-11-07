@@ -30,6 +30,11 @@ pub const TCP_CAP_F_GAP: u16 = 2;
 pub const TCP_CAP_F_CLOSED: u16 = 4;
 pub const TCP_CAP_STATUS_RUNNING: u32 = 1;
 pub const TCP_CAP_STATUS_TARGET_DEAD: u32 = 2;
+pub const RSA_REDIRECT_ABI_VERSION: u32 = 3;
+pub const RSA_REDIRECT_MAX_PROFILES: usize = 8;
+pub const RSA_REDIRECT_READ_MAX: usize = 16;
+pub const RSA_REDIRECT_MAX_ENTRY: usize = 4096;
+pub const RSA_REDIRECT_F_FILE: u32 = 1;
 pub const MEM_CAPTURE_MAX_GROUPS: usize = 6;
 pub const MEM_CAPTURE_MAX_BYTES: usize = 64;
 pub const MEM_MODIFY_MAX_GROUPS: usize = 6;
@@ -83,6 +88,10 @@ pub const CMD_TCP_CAP_INIT: usize = CMD_GRANT_SU + 44;
 pub const CMD_TCP_CAP_READ: usize = CMD_GRANT_SU + 45;
 pub const CMD_TCP_CAP_STOP: usize = CMD_GRANT_SU + 46;
 pub const CMD_GYRO_EVENT_CONFIGURE: usize = CMD_GRANT_SU + 47;
+pub const CMD_RSA_REDIRECT_SET: usize = CMD_GYRO_EVENT_CONFIGURE + 1;
+pub const CMD_RSA_REDIRECT_DEL: usize = CMD_RSA_REDIRECT_SET + 1;
+pub const CMD_RSA_REDIRECT_READ: usize = CMD_RSA_REDIRECT_DEL + 1;
+pub const CMD_RSA_REDIRECT_STATS: usize = CMD_RSA_REDIRECT_READ + 1;
 
 pub const GYRO_EVENT_ONCE: u32 = 1 << 0;
 pub const GYRO_EVENT_X: u32 = 1 << 1;
@@ -277,6 +286,93 @@ pub struct TcpCapReadStats {
     pub captured: u64,
     pub capture_id: u64,
     pub status: u32,
+}
+
+/// Wire layout of kernel rsa_redirect_config, ABI 3. Use RsaRedirectConfig
+/// and KernelDriver::RsaRedirectSet to keep all pointed-to buffers borrowed.
+#[repr(C, align(8))]
+#[derive(Clone, Copy, Default)]
+pub struct RsaRedirectSetRequest {
+    pub abi_version: u32,
+    pub flags: u32,
+    pub expected_crc: u32,
+    pub original_crc: u32,
+    pub key_id: u32,
+    pub capture_pid: i32,
+    pub entry_len: u32,
+    /// C padding before __aligned_u64 entry_offset, also explicit on 32-bit hosts.
+    pub _padding: u32,
+    pub entry_offset: u64,
+    pub private_der: u64,
+    pub public_der: u64,
+    pub original_entry: u64,
+    pub replacement_entry: u64,
+    pub private_der_len: u32,
+    pub public_der_len: u32,
+    pub reserved: [u32; 2],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RsaRedirectDeleteRequest {
+    pub abi_version: u32,
+    pub expected_crc: u32,
+    pub reserved: [u32; 2],
+}
+
+/// A successfully submitted rewrapped UDP Hello. Addresses are network-order
+/// bytes; ports and scalar fields are host-endian. No Debug to avoid logging
+/// the session key and nonce accidentally. Sequence supports retry deduplication.
+#[repr(C, align(8))]
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub struct RsaRedirectResult {
+    pub sequence: u64,
+    pub timestamp_ns: u64,
+    pub uid: u32,
+    pub pid: i32,
+    pub tid: i32,
+    pub expected_crc: u32,
+    pub original_crc: u32,
+    pub network_version: u32,
+    pub family: u16,
+    pub local_port: u16,
+    pub remote_port: u16,
+    pub key_id: u16,
+    pub local_addr: [u8; 16],
+    pub remote_addr: [u8; 16],
+    pub key: [u8; 32],
+    pub nonce: [u8; 8],
+}
+
+#[repr(C, align(8))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RsaRedirectReadRequest {
+    pub abi_version: u32,
+    pub max_count: u32,
+    pub records: u64,
+    pub out_count: u32,
+    pub reserved: u32,
+    pub dropped: u64,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RsaRedirectReadStats {
+    pub count: u32,
+    pub dropped: u64,
+}
+
+#[repr(C, align(8))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RsaRedirectStats {
+    pub abi_version: u32,
+    pub profiles: u32,
+    pub rewrapped: u64,
+    pub crypto_failed: u64,
+    pub send_failed: u64,
+    pub rewritten_reads: u64,
+    pub read_failed: u64,
+    pub captured: u64,
+    pub dropped: u64,
 }
 
 #[repr(C)]

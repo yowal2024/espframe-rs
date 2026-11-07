@@ -1,4 +1,5 @@
 use super::abi::*;
+use super::rsa_redirect::{self, RsaRedirectConfig};
 use super::transport::KernelTransport;
 use std::ffi::{CStr, CString};
 
@@ -645,6 +646,109 @@ impl<T: KernelTransport> KernelDriver<T> {
 
     pub fn TcpCapStopRaw(&self) -> isize {
         unsafe { self.Invoke(CMD_TCP_CAP_STOP, [0; 5]) }
+    }
+
+    /// Register an ABI 3 profile. Does not depend on self.Pid(), open a file,
+    /// or register a UID. The kernel copies borrowed buffers before returning.
+    /// File validation occurs on the selected application's first matching read.
+    pub fn RsaRedirectSet(&self, config: &RsaRedirectConfig<'_>) -> Result<(), isize> {
+        let request = config.request()?;
+        let result = unsafe {
+            self.Invoke(
+                CMD_RSA_REDIRECT_SET,
+                [
+                    (&request as *const RsaRedirectSetRequest) as usize,
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+            )
+        };
+        rsa_redirect::status(result)
+    }
+
+    /// Delete one CRC profile, including its queued results and file binding.
+    /// Does not alter the UID list. Update a profile by deleting then setting it.
+    pub fn RsaRedirectDel(&self, expected_crc: u32) -> Result<(), isize> {
+        let request = RsaRedirectDeleteRequest {
+            abi_version: RSA_REDIRECT_ABI_VERSION,
+            expected_crc,
+            ..Default::default()
+        };
+        let result = unsafe {
+            self.Invoke(
+                CMD_RSA_REDIRECT_DEL,
+                [
+                    (&request as *const RsaRedirectDeleteRequest) as usize,
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+            )
+        };
+        rsa_redirect::status(result)
+    }
+
+    /// Consume at most 16 records. Only records[..stats.count] are valid after
+    /// success; ignore the buffer on error. Deduplicate sequence on retries.
+    /// dropped counts queue overflow; no session secrets are logged here.
+    pub fn RsaRedirectRead(
+        &self,
+        records: &mut [RsaRedirectResult],
+    ) -> Result<RsaRedirectReadStats, isize> {
+        if records.is_empty() {
+            return Err(-22);
+        }
+        let max_count = records.len().min(RSA_REDIRECT_READ_MAX) as u32;
+        let mut request = RsaRedirectReadRequest {
+            abi_version: RSA_REDIRECT_ABI_VERSION,
+            max_count,
+            records: records.as_mut_ptr() as u64,
+            // An unsupported command must not look like a successfully empty queue.
+            out_count: u32::MAX,
+            ..Default::default()
+        };
+        let result = unsafe {
+            self.Invoke(
+                CMD_RSA_REDIRECT_READ,
+                [
+                    (&mut request as *mut RsaRedirectReadRequest) as usize,
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+            )
+        };
+        rsa_redirect::status(result)?;
+        if request.abi_version != RSA_REDIRECT_ABI_VERSION
+            || request.out_count > max_count
+            || request.reserved != 0
+        {
+            return Err(-71);
+        }
+        Ok(RsaRedirectReadStats {
+            count: request.out_count,
+            dropped: request.dropped,
+        })
+    }
+
+    /// Read global RSA counters. An absent/older ABI is reported as EPROTO.
+    pub fn RsaRedirectStats(&self) -> Result<RsaRedirectStats, isize> {
+        let mut stats = RsaRedirectStats::default();
+        let result = unsafe {
+            self.Invoke(
+                CMD_RSA_REDIRECT_STATS,
+                [(&mut stats as *mut RsaRedirectStats) as usize, 0, 0, 0, 0],
+            )
+        };
+        rsa_redirect::status(result)?;
+        if stats.abi_version != RSA_REDIRECT_ABI_VERSION {
+            return Err(-71);
+        }
+        Ok(stats)
     }
 
     pub fn RegisterPageBreak(&self, pid: i32, address: u64) -> Option<PageBreakHandle<T>>

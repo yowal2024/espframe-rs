@@ -4,6 +4,7 @@ pub mod abi;
 mod driver;
 mod memory_flags;
 mod root_shell;
+mod rsa_redirect;
 mod transport;
 #[cfg(any(test, target_os = "android"))]
 mod worker;
@@ -14,6 +15,7 @@ pub use driver::{
 };
 pub use memory_flags::SharedMemoryFlags;
 pub use root_shell::{run_root_command, RootShell, SystemRootShell};
+pub use rsa_redirect::{RsaRedirectConfig, RsaRedirectFile};
 pub use transport::{KernelTransport, SyscallTransport};
 #[cfg(target_os = "android")]
 pub use worker::prepare_current_worker;
