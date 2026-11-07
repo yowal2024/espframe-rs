@@ -1,7 +1,7 @@
 # 内核陀螺仪输出
 
 SurfaceFlinger 生产路径使用 `KernelSensorController`，通过
-`KernelDriver::ConfigureGyroEvent` 调用模块 `0x1003f`，不在 SF 内安装旧的
+`KernelDriver::ConfigureGyroEvent` 调用模块 `0x1003c`，不在 SF 内安装旧的
 sensorservice 用户态 hook。host 保留 `AddRotation`、`SetAngularVelocity` 和轴映射接口。
 角速度仍为度/秒，控制器转换为弧度/秒并叠加到物理 X/Y 输入，保留 Z。
 

@@ -73,7 +73,7 @@ fn set_borrows_buffers_and_registers_before_a_target_pid_exists() {
         456,
         0,
         Transport(|command, args: [usize; 5]| {
-            assert_eq!(command, 0x10040);
+            assert_eq!(command, 0x1003d);
             let request = unsafe { &*(args[0] as *const RsaRedirectSetRequest) };
             assert_eq!(request.abi_version, 3);
             assert_eq!(request.flags, 1);
@@ -127,7 +127,7 @@ fn rewrap_only_zeros_file_fields_and_uses_only_explicit_capture_pid() {
         456,
         999,
         Transport(|command, args: [usize; 5]| {
-            assert_eq!(command, 0x10040);
+            assert_eq!(command, 0x1003d);
             let request = unsafe { &*(args[0] as *const RsaRedirectSetRequest) };
             assert_eq!(request.capture_pid, 234);
             assert_eq!(request.flags, 0);
@@ -262,7 +262,7 @@ fn delete_selects_profile_by_crc_with_current_abi() {
         456,
         0,
         Transport(|command, args: [usize; 5]| {
-            assert_eq!(command, 0x10041);
+            assert_eq!(command, 0x1003e);
             let request = unsafe { &*(args[0] as *const RsaRedirectDeleteRequest) };
             assert_eq!(request.abi_version, 3);
             assert_eq!(request.expected_crc, 0x11223344);
@@ -280,7 +280,7 @@ fn read_returns_key_nonce_identity_and_overflow_and_caps_batch_size() {
         456,
         0,
         Transport(|command, args: [usize; 5]| {
-            assert_eq!(command, 0x10042);
+            assert_eq!(command, 0x1003f);
             let request = unsafe { &mut *(args[0] as *mut RsaRedirectReadRequest) };
             assert_eq!(request.abi_version, 3);
             assert_eq!(request.max_count, 16);
@@ -378,7 +378,7 @@ fn stats_returns_versioned_counters_and_rejects_old_or_unwritten_replies() {
             456,
             0,
             Transport(|command, args: [usize; 5]| {
-                assert_eq!(command, 0x10043);
+                assert_eq!(command, 0x10040);
                 let stats = unsafe { &mut *(args[0] as *mut RsaRedirectStats) };
                 stats.abi_version = version;
                 stats.profiles = 2;

@@ -21,15 +21,6 @@ pub const CALL_MEMORY_USER: u8 = 8;
 pub const UDP_CAP_MAX_PAYLOAD: u32 = 2048;
 pub const UDP_CAP_READ_MAX: usize = 32;
 pub const UDP_CAP_F_TRUNC: u16 = 1;
-// TCP 使用独立的有序入站字节流 ABI；不能复用 UDP 的截断数据报布局。
-pub const TCP_CAP_ABI_VERSION: u32 = 1;
-pub const TCP_CAP_MAX_PAYLOAD: usize = 4096;
-pub const TCP_CAP_READ_MAX: usize = 16;
-pub const TCP_CAP_F_NEW: u16 = 1;
-pub const TCP_CAP_F_GAP: u16 = 2;
-pub const TCP_CAP_F_CLOSED: u16 = 4;
-pub const TCP_CAP_STATUS_RUNNING: u32 = 1;
-pub const TCP_CAP_STATUS_TARGET_DEAD: u32 = 2;
 pub const RSA_REDIRECT_ABI_VERSION: u32 = 3;
 pub const RSA_REDIRECT_MAX_PROFILES: usize = 8;
 pub const RSA_REDIRECT_READ_MAX: usize = 16;
@@ -41,57 +32,192 @@ pub const MEM_MODIFY_MAX_GROUPS: usize = 6;
 
 pub const CMD_GRANT_SU: usize = 0x10010;
 pub const CMD_IS_ENABLE_SU: usize = CMD_GRANT_SU + 1;
-pub const CMD_SET_ENABLE_SU: usize = CMD_GRANT_SU + 2;
-pub const CMD_GET_SERIALNO: usize = CMD_GRANT_SU + 3;
-pub const CMD_IS_TASK_ALIVE: usize = CMD_GRANT_SU + 4;
-pub const CMD_SET_NOT_FREEZER: usize = CMD_GRANT_SU + 5;
-pub const CMD_GET_TIDS: usize = CMD_GRANT_SU + 6;
-pub const CMD_GET_TLS: usize = CMD_GRANT_SU + 7;
-pub const CMD_GET_THREAD_BY_COMM: usize = CMD_GRANT_SU + 8;
-pub const CMD_PROCESS_PAUTH: usize = CMD_GRANT_SU + 9;
-pub const CMD_PROCESS_IOCTL: usize = CMD_GRANT_SU + 10;
-pub const CMD_PEEK_KGSL_SYNCSOURCE_ID: usize = CMD_GRANT_SU + 11;
-pub const CMD_GET_TASK_BY_NAME: usize = CMD_GRANT_SU + 12;
-pub const CMD_GET_MOUDLE_BASE_BY_PID_NAME: usize = CMD_GRANT_SU + 13;
+pub const CMD_SET_ENABLE_SU: usize = CMD_IS_ENABLE_SU + 1;
+pub const CMD_GET_SERIALNO: usize = CMD_SET_ENABLE_SU + 1;
+pub const CMD_IS_TASK_ALIVE: usize = CMD_GET_SERIALNO + 1;
+pub const CMD_SET_NOT_FREEZER: usize = CMD_IS_TASK_ALIVE + 1;
+pub const CMD_GET_TIDS: usize = CMD_SET_NOT_FREEZER + 1;
+pub const CMD_GET_TLS: usize = CMD_GET_TIDS + 1;
+pub const CMD_GET_THREAD_BY_COMM: usize = CMD_GET_TLS + 1;
+pub const CMD_PROCESS_PAUTH: usize = CMD_GET_THREAD_BY_COMM + 1;
+pub const CMD_PROCESS_IOCTL: usize = CMD_PROCESS_PAUTH + 1;
+pub const CMD_PEEK_KGSL_SYNCSOURCE_ID: usize = CMD_PROCESS_IOCTL + 1;
+pub const CMD_GET_TASK_BY_NAME: usize = CMD_PEEK_KGSL_SYNCSOURCE_ID + 1;
+pub const CMD_GET_MOUDLE_BASE_BY_PID_NAME: usize = CMD_GET_TASK_BY_NAME + 1;
 pub const CMD_GET_MODULE_BASE_BY_PID_NAME: usize = CMD_GET_MOUDLE_BASE_BY_PID_NAME;
-pub const CMD_CALL_MEMORY: usize = CMD_GRANT_SU + 14;
-pub const CMD_REMOTE_MMAP: usize = CMD_GRANT_SU + 15;
-pub const CMD_GET_MEM_INFO: usize = CMD_GRANT_SU + 16;
-pub const CMD_REGISTER_HBRK: usize = CMD_GRANT_SU + 17;
-pub const CMD_UNREGISTER_HBRK: usize = CMD_GRANT_SU + 18;
-pub const CMD_SET_HBRK_REGS: usize = CMD_GRANT_SU + 19;
-pub const CMD_PAUSE_HBRK: usize = CMD_GRANT_SU + 20;
-pub const CMD_RESUME_HBRK: usize = CMD_GRANT_SU + 21;
-pub const CMD_HBRK_SET_SHARED: usize = CMD_GRANT_SU + 22;
-pub const CMD_HBRK_CLEAR_SHARED: usize = CMD_GRANT_SU + 23;
-pub const CMD_HBRK_SET_MEM_CAPTURE: usize = CMD_GRANT_SU + 24;
-pub const CMD_HBRK_CLEAR_MEM_CAPTURE: usize = CMD_GRANT_SU + 25;
-pub const CMD_HBRK_SET_MEM_MODIFY: usize = CMD_GRANT_SU + 26;
-pub const CMD_HBRK_CLEAR_MEM_MODIFY: usize = CMD_GRANT_SU + 27;
-pub const CMD_REGISTER_PAGE_HBRK: usize = CMD_GRANT_SU + 28;
-pub const CMD_UNREGISTER_PAGE_HBRK: usize = CMD_GRANT_SU + 29;
-pub const CMD_SET_PAGE_HBRK_REGS: usize = CMD_GRANT_SU + 30;
-pub const CMD_REGISTER_DBI_HBRK: usize = CMD_GRANT_SU + 31;
-pub const CMD_UNREGISTER_DBI_HBRK: usize = CMD_GRANT_SU + 32;
-pub const CMD_REGISTER_SHADOW_HOOK: usize = CMD_GRANT_SU + 33;
-pub const CMD_UNREGISTER_SHADOW_HOOK: usize = CMD_GRANT_SU + 34;
-pub const CMD_REGISTER_MMU_BRK: usize = CMD_GRANT_SU + 35;
-pub const CMD_UNREGISTER_MMU_BRK: usize = CMD_GRANT_SU + 36;
-pub const CMD_SET_MMU_BRK_SHARED: usize = CMD_GRANT_SU + 37;
-pub const CMD_ARM_MMU_BRK: usize = CMD_GRANT_SU + 38;
-pub const CMD_CREATE_TOUCH_EVENT_LISTENER: usize = CMD_GRANT_SU + 39;
-pub const CMD_TOUCH_EVENT_UPDATE_SCREEN_INFO: usize = CMD_GRANT_SU + 40;
-pub const CMD_UDP_CAP_INIT: usize = CMD_GRANT_SU + 41;
-pub const CMD_UDP_CAP_READ: usize = CMD_GRANT_SU + 42;
-pub const CMD_UDP_CAP_STOP: usize = CMD_GRANT_SU + 43;
-pub const CMD_TCP_CAP_INIT: usize = CMD_GRANT_SU + 44;
-pub const CMD_TCP_CAP_READ: usize = CMD_GRANT_SU + 45;
-pub const CMD_TCP_CAP_STOP: usize = CMD_GRANT_SU + 46;
-pub const CMD_GYRO_EVENT_CONFIGURE: usize = CMD_GRANT_SU + 47;
+pub const CMD_CALL_MEMORY: usize = CMD_GET_MODULE_BASE_BY_PID_NAME + 1;
+pub const CMD_REMOTE_MMAP: usize = CMD_CALL_MEMORY + 1;
+pub const CMD_GET_MEM_INFO: usize = CMD_REMOTE_MMAP + 1;
+pub const CMD_REGISTER_HBRK: usize = CMD_GET_MEM_INFO + 1;
+pub const CMD_UNREGISTER_HBRK: usize = CMD_REGISTER_HBRK + 1;
+pub const CMD_SET_HBRK_REGS: usize = CMD_UNREGISTER_HBRK + 1;
+pub const CMD_PAUSE_HBRK: usize = CMD_SET_HBRK_REGS + 1;
+pub const CMD_RESUME_HBRK: usize = CMD_PAUSE_HBRK + 1;
+pub const CMD_HBRK_SET_SHARED: usize = CMD_RESUME_HBRK + 1;
+pub const CMD_HBRK_CLEAR_SHARED: usize = CMD_HBRK_SET_SHARED + 1;
+pub const CMD_HBRK_SET_MEM_CAPTURE: usize = CMD_HBRK_CLEAR_SHARED + 1;
+pub const CMD_HBRK_CLEAR_MEM_CAPTURE: usize = CMD_HBRK_SET_MEM_CAPTURE + 1;
+pub const CMD_HBRK_SET_MEM_MODIFY: usize = CMD_HBRK_CLEAR_MEM_CAPTURE + 1;
+pub const CMD_HBRK_CLEAR_MEM_MODIFY: usize = CMD_HBRK_SET_MEM_MODIFY + 1;
+pub const CMD_REGISTER_PAGE_HBRK: usize = CMD_HBRK_CLEAR_MEM_MODIFY + 1;
+pub const CMD_UNREGISTER_PAGE_HBRK: usize = CMD_REGISTER_PAGE_HBRK + 1;
+pub const CMD_SET_PAGE_HBRK_REGS: usize = CMD_UNREGISTER_PAGE_HBRK + 1;
+pub const CMD_REGISTER_DBI_HBRK: usize = CMD_SET_PAGE_HBRK_REGS + 1;
+pub const CMD_UNREGISTER_DBI_HBRK: usize = CMD_REGISTER_DBI_HBRK + 1;
+pub const CMD_REGISTER_SHADOW_HOOK: usize = CMD_UNREGISTER_DBI_HBRK + 1;
+pub const CMD_UNREGISTER_SHADOW_HOOK: usize = CMD_REGISTER_SHADOW_HOOK + 1;
+pub const CMD_REGISTER_MMU_BRK: usize = CMD_UNREGISTER_SHADOW_HOOK + 1;
+pub const CMD_UNREGISTER_MMU_BRK: usize = CMD_REGISTER_MMU_BRK + 1;
+pub const CMD_SET_MMU_BRK_SHARED: usize = CMD_UNREGISTER_MMU_BRK + 1;
+pub const CMD_ARM_MMU_BRK: usize = CMD_SET_MMU_BRK_SHARED + 1;
+pub const CMD_CREATE_TOUCH_EVENT_LISTENER: usize = CMD_ARM_MMU_BRK + 1;
+pub const CMD_TOUCH_EVENT_UPDATE_SCREEN_INFO: usize = CMD_CREATE_TOUCH_EVENT_LISTENER + 1;
+pub const CMD_UDP_CAP_INIT: usize = CMD_TOUCH_EVENT_UPDATE_SCREEN_INFO + 1;
+pub const CMD_UDP_CAP_READ: usize = CMD_UDP_CAP_INIT + 1;
+pub const CMD_UDP_CAP_STOP: usize = CMD_UDP_CAP_READ + 1;
+pub const CMD_GYRO_EVENT_CONFIGURE: usize = CMD_UDP_CAP_STOP + 1;
 pub const CMD_RSA_REDIRECT_SET: usize = CMD_GYRO_EVENT_CONFIGURE + 1;
 pub const CMD_RSA_REDIRECT_DEL: usize = CMD_RSA_REDIRECT_SET + 1;
 pub const CMD_RSA_REDIRECT_READ: usize = CMD_RSA_REDIRECT_DEL + 1;
 pub const CMD_RSA_REDIRECT_STATS: usize = CMD_RSA_REDIRECT_READ + 1;
+pub const CMD_TGCP_MIDDLE_SET: usize = CMD_RSA_REDIRECT_STATS + 1;
+pub const CMD_TGCP_MIDDLE_STOP: usize = CMD_TGCP_MIDDLE_SET + 1;
+pub const CMD_TGCP_MIDDLE_READ: usize = CMD_TGCP_MIDDLE_STOP + 1;
+pub const CMD_TGCP_MIDDLE_STATS: usize = CMD_TGCP_MIDDLE_READ + 1;
+pub const TGCP_MIDDLE_ABI_VERSION: u32 = 2;
+pub const TGCP_MIDDLE_READ_MAX: usize = 16;
+pub const TGCP_MIDDLE_MAX_PAYLOAD: usize = 4096;
+pub const TGCP_MIDDLE_F_AUTO_DISCOVER: u32 = 1;
+pub const TGCP_MIDDLE_EVENT_READY: u16 = 1;
+pub const TGCP_MIDDLE_EVENT_CLOSED: u16 = 2;
+pub const TGCP_MIDDLE_EVENT_ERROR: u16 = 3;
+pub const TGCP_MIDDLE_EVENT_DATA: u16 = 4;
+pub const TGCP_MIDDLE_DATA_FIRST: u32 = 1;
+pub const TGCP_MIDDLE_DATA_LAST: u32 = 2;
+pub const TGCP_MIDDLE_STATUS_RUNNING: u32 = 1;
+pub const TGCP_MIDDLE_STATUS_TARGET_DEAD: u32 = 2;
+
+#[repr(C)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct TgcpMiddleConfig {
+    pub abi_version: u32,
+    pub pid: i32,
+    pub family: u16,
+    pub remote_port: u16,
+    pub flags: u32,
+    pub remote_addr: [u8; 16],
+    pub prime_len: u32,
+    pub generator: u32,
+    /// Canonical shortest big-endian p, followed by zeros. No default group.
+    pub prime: [u8; 64],
+    pub reserved: [u32; 2],
+}
+
+impl Default for TgcpMiddleConfig {
+    fn default() -> Self {
+        Self {
+            abi_version: 0,
+            pid: 0,
+            family: 0,
+            remote_port: 0,
+            flags: 0,
+            remote_addr: [0; 16],
+            prime_len: 0,
+            generator: 0,
+            prime: [0; 64],
+            reserved: [0; 2],
+        }
+    }
+}
+
+/// Only READY carries keys. DATA is the exact client-facing (Kc) ciphertext.
+/// Deliberately no Debug implementation: records may contain session secrets.
+#[repr(C, align(8))]
+#[derive(Clone, PartialEq, Eq)]
+pub struct TgcpMiddleEvent {
+    pub seq: u64,
+    pub session_id: u64,
+    pub socket_id: u64,
+    pub ts_ns: u64,
+    pub target_pid: u32,
+    pub sock_uid: u32,
+    pub family: u16,
+    pub event_type: u16,
+    pub local_port: u16,
+    pub remote_port: u16,
+    pub local_addr: [u8; 16],
+    pub remote_addr: [u8; 16],
+    pub kc: [u8; 16],
+    pub ks: [u8; 16],
+    pub error: i32,
+    pub reserved: u32,
+    pub stream_offset: u64,
+    pub payload_len: u32,
+    pub flags: u32,
+    pub payload: [u8; TGCP_MIDDLE_MAX_PAYLOAD],
+}
+
+impl Default for TgcpMiddleEvent {
+    fn default() -> Self {
+        Self {
+            seq: 0,
+            session_id: 0,
+            socket_id: 0,
+            ts_ns: 0,
+            target_pid: 0,
+            sock_uid: 0,
+            family: 0,
+            event_type: 0,
+            local_port: 0,
+            remote_port: 0,
+            local_addr: [0; 16],
+            remote_addr: [0; 16],
+            kc: [0; 16],
+            ks: [0; 16],
+            error: 0,
+            reserved: 0,
+            stream_offset: 0,
+            payload_len: 0,
+            flags: 0,
+            payload: [0; TGCP_MIDDLE_MAX_PAYLOAD],
+        }
+    }
+}
+
+#[repr(C, align(8))]
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub struct TgcpMiddleReadRequest {
+    pub abi_version: u32,
+    pub max_count: u32,
+    pub records: u64,
+    pub out_count: u32,
+    pub reserved: u32,
+    pub dropped: u64,
+    pub session_id: u64,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TgcpMiddleReadStats {
+    pub count: u32,
+    pub session_id: u64,
+    pub dropped: u64,
+}
+
+#[repr(C, align(8))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TgcpMiddleStats {
+    pub abi_version: u32,
+    pub status: u32,
+    pub session_id: u64,
+    pub emitted: u64,
+    pub dropped: u64,
+    pub active_flows: u32,
+    pub queued_events: u32,
+    pub send_hits: u64,
+    pub recv_hits: u64,
+    pub target_pid: u32,
+    pub reserved: u32,
+}
 
 pub const GYRO_EVENT_ONCE: u32 = 1 << 0;
 pub const GYRO_EVENT_X: u32 = 1 << 1;
@@ -214,78 +340,6 @@ pub struct UdpCapReadStats {
     pub count: u32,
     pub overflow: u64,
     pub captured: u64,
-}
-
-/// 地址为网络字节排列，端口和其余整数为主机字节序。固定捕获入站数据。
-/// NEW 表示首次可见位置，采集可能从已建立连接的中途开始。
-#[repr(C)]
-#[derive(Clone, PartialEq, Eq)]
-pub struct TcpCapChunk {
-    pub seq: u64,
-    pub ts_ns: u64,
-    pub capture_id: u64,
-    pub socket_id: u64,
-    pub stream_offset: u64,
-    pub sock_uid: u32,
-    pub family: u16,
-    pub flags: u16,
-    pub src_addr: [u8; 16],
-    pub dst_addr: [u8; 16],
-    pub src_port: u16,
-    pub dst_port: u16,
-    pub payload_len: u32,
-    pub payload: [u8; TCP_CAP_MAX_PAYLOAD],
-}
-
-impl Default for TcpCapChunk {
-    fn default() -> Self {
-        Self {
-            seq: 0,
-            ts_ns: 0,
-            capture_id: 0,
-            socket_id: 0,
-            stream_offset: 0,
-            sock_uid: 0,
-            family: 0,
-            flags: 0,
-            src_addr: [0; 16],
-            dst_addr: [0; 16],
-            src_port: 0,
-            dst_port: 0,
-            payload_len: 0,
-            payload: [0; TCP_CAP_MAX_PAYLOAD],
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct TcpCapInitRequest {
-    pub pid: i32,
-    pub abi_version: u32,
-    pub reserved: [u32; 2],
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct TcpCapReadRequest {
-    pub buf: u64,
-    pub max_count: u32,
-    pub out_count: u32,
-    pub dropped: u64,
-    pub captured: u64,
-    pub capture_id: u64,
-    pub status: u32,
-    pub reserved: u32,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct TcpCapReadStats {
-    pub count: u32,
-    pub dropped: u64,
-    pub captured: u64,
-    pub capture_id: u64,
-    pub status: u32,
 }
 
 /// Wire layout of kernel rsa_redirect_config, ABI 3. Use RsaRedirectConfig

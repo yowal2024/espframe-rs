@@ -570,39 +570,66 @@ impl<T: KernelTransport> KernelDriver<T> {
         unsafe { self.Invoke(CMD_UDP_CAP_STOP, [0; 5]) >= 0 }
     }
 
-    /// 新内核的可选接口。错误码原样返回，由调用者决定何时重试；不重启 UDP。
-    pub fn TcpCapInitRaw(&self, target_pid: i32) -> isize {
-        if target_pid <= 0 {
-            return -22;
+    /// Select fresh IPv4 connections of an explicit target. AUTO never changes UDP.
+    pub fn TgcpMiddleSet(&self, config: &TgcpMiddleConfig) -> Result<(), isize> {
+        if config.abi_version != TGCP_MIDDLE_ABI_VERSION
+            || config.pid <= 0
+            || config.family != 2
+            || config.flags & !TGCP_MIDDLE_F_AUTO_DISCOVER != 0
+            || config.remote_addr[4..].iter().any(|byte| *byte != 0)
+            || (config.flags == TGCP_MIDDLE_F_AUTO_DISCOVER
+                && (config.remote_port != 0 || config.remote_addr != [0; 16]))
+            || (config.flags == 0
+                && (config.remote_port == 0 || !tgcp_remote_ipv4(&config.remote_addr)))
+            || !tgcp_dh_parameters_valid(config)
+        {
+            return Err(-22);
         }
-        let request = TcpCapInitRequest {
-            pid: target_pid,
-            abi_version: TCP_CAP_ABI_VERSION,
-            ..Default::default()
-        };
-        unsafe {
+        let result = unsafe {
             self.Invoke(
-                CMD_TCP_CAP_INIT,
-                [(&request as *const TcpCapInitRequest) as usize, 0, 0, 0, 0],
+                CMD_TGCP_MIDDLE_SET,
+                [config as *const TgcpMiddleConfig as usize, 0, 0, 0, 0],
             )
+        };
+        if result == 0 {
+            Ok(())
+        } else {
+            Err(result)
         }
     }
 
-    pub fn TcpCapRead(&self, chunks: &mut [TcpCapChunk]) -> Result<TcpCapReadStats, isize> {
-        if chunks.is_empty() {
+    pub fn TgcpMiddleStop(&self) -> Result<(), isize> {
+        let result = unsafe { self.Invoke(CMD_TGCP_MIDDLE_STOP, [0; 5]) };
+        if result == 0 {
+            Ok(())
+        } else {
+            Err(result)
+        }
+    }
+
+    /// Validate every returned record before exposing READY secrets or DATA.
+    /// On any failure wipe the whole caller buffer, including previous records.
+    pub fn TgcpMiddleRead(
+        &self,
+        records: &mut [TgcpMiddleEvent],
+    ) -> Result<TgcpMiddleReadStats, isize> {
+        if records.is_empty() {
             return Err(-22);
         }
-        let max_count = chunks.len().min(TCP_CAP_READ_MAX) as u32;
-        let mut request = TcpCapReadRequest {
-            buf: chunks.as_mut_ptr() as u64,
+        records.fill(TgcpMiddleEvent::default());
+        let max_count = records.len().min(TGCP_MIDDLE_READ_MAX) as u32;
+        let mut request = TgcpMiddleReadRequest {
+            abi_version: TGCP_MIDDLE_ABI_VERSION,
             max_count,
+            records: records.as_mut_ptr() as u64,
+            out_count: u32::MAX,
             ..Default::default()
         };
         let result = unsafe {
             self.Invoke(
-                CMD_TCP_CAP_READ,
+                CMD_TGCP_MIDDLE_READ,
                 [
-                    (&mut request as *mut TcpCapReadRequest) as usize,
+                    &mut request as *mut TgcpMiddleReadRequest as usize,
                     0,
                     0,
                     0,
@@ -610,42 +637,90 @@ impl<T: KernelTransport> KernelDriver<T> {
                 ],
             )
         };
-        if result < 0 {
-            return Err(result);
+        let valid = result == 0
+            && request.abi_version == TGCP_MIDDLE_ABI_VERSION
+            && request.reserved == 0
+            && request.out_count <= max_count
+            && request.session_id != 0
+            && records.iter().take(request.out_count as usize).all(|r| {
+                let len = r.payload_len as usize;
+                r.seq != 0
+                    && r.session_id == request.session_id
+                    && r.socket_id != 0
+                    && r.target_pid != 0
+                    && r.family == 2
+                    && r.reserved == 0
+                    && r.local_port != 0
+                    && r.remote_port != 0
+                    && r.local_addr[4..] == [0; 12]
+                    && r.remote_addr[4..] == [0; 12]
+                    && tgcp_remote_ipv4(&r.remote_addr)
+                    && len <= TGCP_MIDDLE_MAX_PAYLOAD
+                    && r.stream_offset
+                        .checked_add(u64::from(r.payload_len))
+                        .is_some()
+                    && r.payload[len.min(TGCP_MIDDLE_MAX_PAYLOAD)..]
+                        .iter()
+                        .all(|v| *v == 0)
+                    && match r.event_type {
+                        TGCP_MIDDLE_EVENT_READY => {
+                            r.error == 0 && len == 0 && r.flags == 0 && r.stream_offset == 0
+                        }
+                        TGCP_MIDDLE_EVENT_DATA => {
+                            r.kc == [0; 16]
+                                && r.ks == [0; 16]
+                                && r.error == 0
+                                && len != 0
+                                && r.flags & !(TGCP_MIDDLE_DATA_FIRST | TGCP_MIDDLE_DATA_LAST) == 0
+                                && ((r.flags & TGCP_MIDDLE_DATA_FIRST != 0)
+                                    == (r.stream_offset == 0))
+                        }
+                        TGCP_MIDDLE_EVENT_CLOSED | TGCP_MIDDLE_EVENT_ERROR => {
+                            r.kc == [0; 16]
+                                && r.ks == [0; 16]
+                                && len == 0
+                                && r.flags == 0
+                                && r.stream_offset == 0
+                        }
+                        _ => false,
+                    }
+            });
+        if !valid {
+            records.fill(TgcpMiddleEvent::default());
+            return Err(if result != 0 { result } else { -71 });
         }
-        // 未实现接口的旧驱动可能没有写回请求，不能将全零结果当成采集成功。
-        if request.out_count > max_count
-            || request.capture_id == 0
-            || !matches!(
-                request.status,
-                TCP_CAP_STATUS_RUNNING | TCP_CAP_STATUS_TARGET_DEAD
-            )
-            || request.reserved != 0
-            || chunks.iter().take(request.out_count as usize).any(|chunk| {
-                chunk.capture_id != request.capture_id
-                    || chunk.socket_id == 0
-                    || chunk.payload_len as usize > TCP_CAP_MAX_PAYLOAD
-                    || !matches!(chunk.family, 2 | 10)
-                    || chunk.flags & !(TCP_CAP_F_NEW | TCP_CAP_F_GAP | TCP_CAP_F_CLOSED) != 0
-                    || chunk
-                        .stream_offset
-                        .checked_add(u64::from(chunk.payload_len))
-                        .is_none()
-            })
-        {
-            return Err(-71); // EPROTO：拒绝错误的 ABI 布局或越界输出。
-        }
-        Ok(TcpCapReadStats {
+        Ok(TgcpMiddleReadStats {
             count: request.out_count,
+            session_id: request.session_id,
             dropped: request.dropped,
-            captured: request.captured,
-            capture_id: request.capture_id,
-            status: request.status,
         })
     }
 
-    pub fn TcpCapStopRaw(&self) -> isize {
-        unsafe { self.Invoke(CMD_TCP_CAP_STOP, [0; 5]) }
+    pub fn TgcpMiddleStats(&self) -> Result<TgcpMiddleStats, isize> {
+        let mut stats = TgcpMiddleStats {
+            abi_version: TGCP_MIDDLE_ABI_VERSION,
+            ..Default::default()
+        };
+        let result = unsafe {
+            self.Invoke(
+                CMD_TGCP_MIDDLE_STATS,
+                [&mut stats as *mut TgcpMiddleStats as usize, 0, 0, 0, 0],
+            )
+        };
+        if result != 0 {
+            return Err(result);
+        }
+        if stats.abi_version != TGCP_MIDDLE_ABI_VERSION
+            || stats.reserved != 0
+            || stats.status & !(TGCP_MIDDLE_STATUS_RUNNING | TGCP_MIDDLE_STATUS_TARGET_DEAD) != 0
+            || (stats.status & TGCP_MIDDLE_STATUS_TARGET_DEAD != 0
+                && stats.status & TGCP_MIDDLE_STATUS_RUNNING == 0)
+            || (stats.status & TGCP_MIDDLE_STATUS_RUNNING != 0
+                && (stats.session_id == 0 || stats.target_pid == 0))
+        {
+            return Err(-71);
+        }
+        Ok(stats)
     }
 
     /// Register an ABI 3 profile. Does not depend on self.Pid(), open a file,
@@ -841,6 +916,35 @@ impl<T: KernelTransport> KernelDriver<T> {
         }
         let result = unsafe { self.Invoke(command, [pid as usize, address as usize, 0, 0, 0]) };
         (result > 0).then_some(result as u64)
+    }
+}
+
+// Private LAN/VPN peers remain valid. The kernel additionally checks RTN_LOCAL
+// in the socket network namespace; userspace cannot infer the device addresses.
+fn tgcp_remote_ipv4(addr: &[u8; 16]) -> bool {
+    addr[0] != 0 && addr[0] != 127 && addr[0] < 224 && !(addr[0] == 169 && addr[1] == 254)
+}
+
+// Match the kernel's canonical-encoding/range checks; this is not a primality
+// test. Comparing p > g + 1 avoids subtraction/underflow on caller input.
+fn tgcp_dh_parameters_valid(config: &TgcpMiddleConfig) -> bool {
+    let len = config.prime_len as usize;
+    if !(1..=config.prime.len()).contains(&len)
+        || config.prime[0] == 0
+        || config.prime[len - 1] & 1 == 0
+        || config.prime[len..].iter().any(|byte| *byte != 0)
+        || config.reserved != [0; 2]
+        || config.generator < 2
+    {
+        return false;
+    }
+    if len <= 8 {
+        let p = config.prime[..len]
+            .iter()
+            .fold(0u64, |value, byte| (value << 8) | u64::from(*byte));
+        p >= 5 && p > u64::from(config.generator) + 1
+    } else {
+        true
     }
 }
 
