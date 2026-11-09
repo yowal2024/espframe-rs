@@ -1,6 +1,4 @@
-use super::abi::{
-    RsaRedirectSetRequest, RSA_REDIRECT_ABI_VERSION, RSA_REDIRECT_F_FILE, RSA_REDIRECT_MAX_ENTRY,
-};
+use super::abi::{RsaRedirectSetRequest, RSA_REDIRECT_F_FILE, RSA_REDIRECT_MAX_ENTRY};
 
 /// Borrowed RSA-2048 / PKCS#1 DER configuration; no package name, UID or file
 /// descriptor. The existing kernel UID list selects applications.
@@ -21,13 +19,13 @@ pub struct RsaRedirectConfig<'a> {
     pub file: Option<RsaRedirectFile<'a>>,
 }
 
-/// Original and replacement bytes at a fixed file offset. No caller open is
-/// required: the kernel binds the first matching successful read by a selected
-/// UID after checking actual file bounds and original bytes. Only read/pread
-/// are covered. SET success does not mean the file has already been validated.
+/// Original and replacement byte patterns, with no caller file open or offset.
+/// The kernel searches near the actual read returned for a selected UID and
+/// binds only a unique matching profile/location. Ambiguous matches fail with
+/// ENOTUNIQ without a new binding or rewrite. Only read/pread are covered;
+/// SET success does not mean a file has already been matched.
 #[derive(Clone, Copy)]
 pub struct RsaRedirectFile<'a> {
-    pub entry_offset: u64,
     pub original_entry: &'a [u8],
     pub replacement_entry: &'a [u8],
 }
@@ -45,7 +43,6 @@ impl RsaRedirectConfig<'_> {
             return Err(-22);
         }
         let mut request = RsaRedirectSetRequest {
-            abi_version: RSA_REDIRECT_ABI_VERSION,
             expected_crc: self.expected_crc,
             original_crc: self.original_crc,
             key_id: u32::from(self.key_id),
@@ -61,14 +58,11 @@ impl RsaRedirectConfig<'_> {
             if length == 0
                 || length > RSA_REDIRECT_MAX_ENTRY
                 || length != file.replacement_entry.len()
-                || file.entry_offset > i64::MAX as u64
-                || length as u64 > i64::MAX as u64 - file.entry_offset
             {
                 return Err(-22);
             }
             request.flags = RSA_REDIRECT_F_FILE;
             request.entry_len = length as u32;
-            request.entry_offset = file.entry_offset;
             request.original_entry = file.original_entry.as_ptr() as u64;
             request.replacement_entry = file.replacement_entry.as_ptr() as u64;
         }
@@ -80,6 +74,6 @@ pub(super) fn status(result: isize) -> Result<(), isize> {
     match result {
         0 => Ok(()),
         error if error < 0 => Err(error),
-        _ => Err(-71), // EPROTO: all four commands return exactly zero on success.
+        _ => Err(-71), // EPROTO: SET, DEL and STATS return zero on success.
     }
 }

@@ -1,6 +1,8 @@
 use super::abi::*;
 use super::rsa_redirect::{self, RsaRedirectConfig};
+use super::signs_redirect::{self, SignsRedirectConfig};
 use super::transport::KernelTransport;
+use super::type7_proxy::{self, Type7ProxyConfig};
 use std::ffi::{CStr, CString};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -570,25 +572,24 @@ impl<T: KernelTransport> KernelDriver<T> {
         unsafe { self.Invoke(CMD_UDP_CAP_STOP, [0; 5]) >= 0 }
     }
 
-    /// Select fresh IPv4 connections of an explicit target. AUTO never changes UDP.
-    pub fn TgcpMiddleSet(&self, config: &TgcpMiddleConfig) -> Result<(), isize> {
-        if config.abi_version != TGCP_MIDDLE_ABI_VERSION
-            || config.pid <= 0
-            || config.family != 2
-            || config.flags & !TGCP_MIDDLE_F_AUTO_DISCOVER != 0
-            || config.remote_addr[4..].iter().any(|byte| *byte != 0)
-            || (config.flags == TGCP_MIDDLE_F_AUTO_DISCOVER
-                && (config.remote_port != 0 || config.remote_addr != [0; 16]))
-            || (config.flags == 0
-                && (config.remote_port == 0 || !tgcp_remote_ipv4(&config.remote_addr)))
-            || !tgcp_dh_parameters_valid(config)
-        {
+    /// Arm content discovery for new IPv4 TCP connections of selected UIDs.
+    /// Does not require self.Pid() or a known peer. The kernel copies the exact
+    /// canonical big-endian public prime before returning; private DH state is
+    /// generated independently per mode-3 connection.
+    pub fn TgcpMiddleSet(&self, prime: &[u8], generator: u32) -> Result<(), isize> {
+        if !tgcp_dh_parameters_valid(prime, generator) {
             return Err(-22);
         }
         let result = unsafe {
             self.Invoke(
                 CMD_TGCP_MIDDLE_SET,
-                [config as *const TgcpMiddleConfig as usize, 0, 0, 0, 0],
+                [
+                    prime.as_ptr() as usize,
+                    prime.len(),
+                    generator as usize,
+                    0,
+                    0,
+                ],
             )
         };
         if result == 0 {
@@ -618,42 +619,34 @@ impl<T: KernelTransport> KernelDriver<T> {
         }
         records.fill(TgcpMiddleEvent::default());
         let max_count = records.len().min(TGCP_MIDDLE_READ_MAX) as u32;
-        let mut request = TgcpMiddleReadRequest {
-            abi_version: TGCP_MIDDLE_ABI_VERSION,
-            max_count,
-            records: records.as_mut_ptr() as u64,
-            out_count: u32::MAX,
-            ..Default::default()
-        };
+        let mut dropped = 0u64;
+        let mut session_id = 0u64;
         let result = unsafe {
             self.Invoke(
                 CMD_TGCP_MIDDLE_READ,
                 [
-                    &mut request as *mut TgcpMiddleReadRequest as usize,
-                    0,
-                    0,
-                    0,
+                    records.as_mut_ptr() as usize,
+                    max_count as usize,
+                    &mut dropped as *mut u64 as usize,
+                    &mut session_id as *mut u64 as usize,
                     0,
                 ],
             )
         };
-        let valid = result == 0
-            && request.abi_version == TGCP_MIDDLE_ABI_VERSION
-            && request.reserved == 0
-            && request.out_count <= max_count
-            && request.session_id != 0
-            && records.iter().take(request.out_count as usize).all(|r| {
+        let valid = result >= 0
+            && result <= max_count as isize
+            && session_id != 0
+            && records.iter().take(result.max(0) as usize).all(|r| {
                 let len = r.payload_len as usize;
                 r.seq != 0
-                    && r.session_id == request.session_id
+                    && r.session_id == session_id
                     && r.socket_id != 0
                     && r.target_pid != 0
+                    && (1..=32767).contains(&r.sock_uid)
                     && r.family == 2
-                    && r.reserved == 0
                     && r.local_port != 0
                     && r.remote_port != 0
-                    && r.local_addr[4..] == [0; 12]
-                    && r.remote_addr[4..] == [0; 12]
+                    && r.local_addr[..12] == [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff]
                     && tgcp_remote_ipv4(&r.remote_addr)
                     && len <= TGCP_MIDDLE_MAX_PAYLOAD
                     && r.stream_offset
@@ -664,11 +657,15 @@ impl<T: KernelTransport> KernelDriver<T> {
                         .all(|v| *v == 0)
                     && match r.event_type {
                         TGCP_MIDDLE_EVENT_READY => {
-                            r.error == 0 && len == 0 && r.flags == 0 && r.stream_offset == 0
+                            matches!(r.key_mode, 2 | 3)
+                                && r.error == 0
+                                && len == 0
+                                && r.flags == 0
+                                && r.stream_offset == 0
                         }
                         TGCP_MIDDLE_EVENT_DATA => {
                             r.kc == [0; 16]
-                                && r.ks == [0; 16]
+                                && r.key_mode == 0
                                 && r.error == 0
                                 && len != 0
                                 && r.flags & !(TGCP_MIDDLE_DATA_FIRST | TGCP_MIDDLE_DATA_LAST) == 0
@@ -677,7 +674,7 @@ impl<T: KernelTransport> KernelDriver<T> {
                         }
                         TGCP_MIDDLE_EVENT_CLOSED | TGCP_MIDDLE_EVENT_ERROR => {
                             r.kc == [0; 16]
-                                && r.ks == [0; 16]
+                                && r.key_mode == 0
                                 && len == 0
                                 && r.flags == 0
                                 && r.stream_offset == 0
@@ -687,20 +684,17 @@ impl<T: KernelTransport> KernelDriver<T> {
             });
         if !valid {
             records.fill(TgcpMiddleEvent::default());
-            return Err(if result != 0 { result } else { -71 });
+            return Err(if result < 0 { result } else { -71 });
         }
         Ok(TgcpMiddleReadStats {
-            count: request.out_count,
-            session_id: request.session_id,
-            dropped: request.dropped,
+            count: result as u32,
+            session_id,
+            dropped,
         })
     }
 
     pub fn TgcpMiddleStats(&self) -> Result<TgcpMiddleStats, isize> {
-        let mut stats = TgcpMiddleStats {
-            abi_version: TGCP_MIDDLE_ABI_VERSION,
-            ..Default::default()
-        };
+        let mut stats = TgcpMiddleStats::default();
         let result = unsafe {
             self.Invoke(
                 CMD_TGCP_MIDDLE_STATS,
@@ -710,30 +704,26 @@ impl<T: KernelTransport> KernelDriver<T> {
         if result != 0 {
             return Err(result);
         }
-        if stats.abi_version != TGCP_MIDDLE_ABI_VERSION
-            || stats.reserved != 0
-            || stats.status & !(TGCP_MIDDLE_STATUS_RUNNING | TGCP_MIDDLE_STATUS_TARGET_DEAD) != 0
-            || (stats.status & TGCP_MIDDLE_STATUS_TARGET_DEAD != 0
-                && stats.status & TGCP_MIDDLE_STATUS_RUNNING == 0)
-            || (stats.status & TGCP_MIDDLE_STATUS_RUNNING != 0
-                && (stats.session_id == 0 || stats.target_pid == 0))
+        if stats.padding != 0
+            || stats.status & !TGCP_MIDDLE_STATUS_RUNNING != 0
+            || (stats.status & TGCP_MIDDLE_STATUS_RUNNING != 0 && stats.session_id == 0)
         {
             return Err(-71);
         }
         Ok(stats)
     }
 
-    /// Register an ABI 3 profile. Does not depend on self.Pid(), open a file,
+    /// Register a profile. Does not depend on self.Pid(), open a file,
     /// or register a UID. The kernel copies borrowed buffers before returning.
     /// File validation occurs on the selected application's first matching read.
-    pub fn RsaRedirectSet(&self, config: &RsaRedirectConfig<'_>) -> Result<(), isize> {
+    pub fn UamNetSet(&self, config: &RsaRedirectConfig<'_>) -> Result<(), isize> {
         let request = config.request()?;
         let result = unsafe {
             self.Invoke(
-                CMD_RSA_REDIRECT_SET,
+                CMD_NET_SPOOF_SET,
                 [
+                    SpoofType::Uam as usize,
                     (&request as *const RsaRedirectSetRequest) as usize,
-                    0,
                     0,
                     0,
                     0,
@@ -745,22 +735,11 @@ impl<T: KernelTransport> KernelDriver<T> {
 
     /// Delete one CRC profile, including its queued results and file binding.
     /// Does not alter the UID list. Update a profile by deleting then setting it.
-    pub fn RsaRedirectDel(&self, expected_crc: u32) -> Result<(), isize> {
-        let request = RsaRedirectDeleteRequest {
-            abi_version: RSA_REDIRECT_ABI_VERSION,
-            expected_crc,
-            ..Default::default()
-        };
+    pub fn UamNetStop(&self, expected_crc: u32) -> Result<(), isize> {
         let result = unsafe {
             self.Invoke(
-                CMD_RSA_REDIRECT_DEL,
-                [
-                    (&request as *const RsaRedirectDeleteRequest) as usize,
-                    0,
-                    0,
-                    0,
-                    0,
-                ],
+                CMD_NET_SPOOF_STOP,
+                [SpoofType::Uam as usize, expected_crc as usize, 0, 0, 0],
             )
         };
         rsa_redirect::status(result)
@@ -769,28 +748,48 @@ impl<T: KernelTransport> KernelDriver<T> {
     /// Consume at most 16 records. Only records[..stats.count] are valid after
     /// success; ignore the buffer on error. Deduplicate sequence on retries.
     /// dropped counts queue overflow; no session secrets are logged here.
-    pub fn RsaRedirectRead(
+    pub fn UamNetRead(
         &self,
         records: &mut [RsaRedirectResult],
     ) -> Result<RsaRedirectReadStats, isize> {
         if records.is_empty() {
             return Err(-22);
         }
-        let max_count = records.len().min(RSA_REDIRECT_READ_MAX) as u32;
-        let mut request = RsaRedirectReadRequest {
-            abi_version: RSA_REDIRECT_ABI_VERSION,
-            max_count,
-            records: records.as_mut_ptr() as u64,
-            // An unsupported command must not look like a successfully empty queue.
-            out_count: u32::MAX,
-            ..Default::default()
-        };
+        let max_count = records.len().min(RSA_REDIRECT_READ_MAX);
+        let mut dropped = 0_u64;
         let result = unsafe {
             self.Invoke(
-                CMD_RSA_REDIRECT_READ,
+                CMD_NET_SPOOF_READ,
                 [
-                    (&mut request as *mut RsaRedirectReadRequest) as usize,
+                    SpoofType::Uam as usize,
+                    records.as_mut_ptr() as usize,
+                    max_count,
+                    (&mut dropped as *mut u64) as usize,
                     0,
+                ],
+            )
+        };
+        if result < 0 {
+            return Err(result);
+        }
+        if result as usize > max_count {
+            return Err(-71);
+        }
+        Ok(RsaRedirectReadStats {
+            count: result as u32,
+            dropped,
+        })
+    }
+
+    /// Read global RSA counters using the matching kernel's output layout.
+    pub fn UamNetStats(&self) -> Result<RsaRedirectStats, isize> {
+        let mut stats = RsaRedirectStats::default();
+        let result = unsafe {
+            self.Invoke(
+                CMD_NET_SPOOF_STATS,
+                [
+                    SpoofType::Uam as usize,
+                    (&mut stats as *mut RsaRedirectStats) as usize,
                     0,
                     0,
                     0,
@@ -798,32 +797,142 @@ impl<T: KernelTransport> KernelDriver<T> {
             )
         };
         rsa_redirect::status(result)?;
-        if request.abi_version != RSA_REDIRECT_ABI_VERSION
-            || request.out_count > max_count
-            || request.reserved != 0
-        {
-            return Err(-71);
-        }
-        Ok(RsaRedirectReadStats {
-            count: request.out_count,
-            dropped: request.dropped,
+        Ok(stats)
+    }
+
+    /// Enable bounded encrypted-entry replacement through the vfs_read inline hook.
+    /// The kernel discovers the first unique overlapping match and binds its file.
+    /// No caller file open, fd, fixed offset, process lookup or request struct is needed.
+    pub fn DfmReadSet(&self, config: &SignsRedirectConfig<'_>) -> Result<(), isize> {
+        let result = unsafe { self.Invoke(CMD_READ_SPOOF_SET, config.arguments()?) };
+        signs_redirect::status(result)
+    }
+
+    /// Atomically publish one to four independently bound replacement members.
+    /// For example, supply a 128-byte signed configuration and a separate 32-byte
+    /// root using their actual on-disk encoding. Each member must be nonempty,
+    /// equal length and at most 4096 bytes; duplicate original bytes are rejected.
+    /// All matching disjoint members in one read are checked before any write;
+    /// overlapping matches fail closed. Publication does not make later reads
+    /// of separate files simultaneous. The kernel copies the borrowed buffers.
+    pub fn DfmReadSetGroup(&self, configs: &[SignsRedirectConfig<'_>]) -> Result<(), isize> {
+        let entries = signs_redirect::group_entries(configs)?;
+        signs_redirect::status(unsafe {
+            self.Invoke(
+                CMD_READ_SPOOF_SET_GROUP,
+                [
+                    SpoofType::Dfm as usize,
+                    configs.len(),
+                    entries.as_ptr() as usize,
+                    0,
+                    0,
+                ],
+            )
         })
     }
 
-    /// Read global RSA counters. An absent/older ABI is reported as EPROTO.
-    pub fn RsaRedirectStats(&self) -> Result<RsaRedirectStats, isize> {
-        let mut stats = RsaRedirectStats::default();
+    /// Drain the active Signs group and release all file/mode bindings.
+    /// Repeated STOP succeeds; already-returned application buffers are unchanged.
+    pub fn DfmReadStop(&self) -> Result<(), isize> {
+        signs_redirect::status(unsafe {
+            self.Invoke(CMD_READ_SPOOF_STOP, [SpoofType::Dfm as usize, 0, 0, 0, 0])
+        })
+    }
+
+    /// Arm before new UDP sockets. The kernel copies and validates the public
+    /// certificate/root and returns a positive generation owned by this caller.
+    pub fn DfmNetSet(&self, config: &Type7ProxyConfig<'_>) -> Result<u64, isize> {
         let result = unsafe {
             self.Invoke(
-                CMD_RSA_REDIRECT_STATS,
-                [(&mut stats as *mut RsaRedirectStats) as usize, 0, 0, 0, 0],
+                CMD_NET_SPOOF_SET,
+                [
+                    SpoofType::Dfm as usize,
+                    config.certificate.as_ptr() as usize,
+                    config.root.as_ptr() as usize,
+                    0,
+                    0,
+                ],
             )
         };
-        rsa_redirect::status(result)?;
-        if stats.abi_version != RSA_REDIRECT_ABI_VERSION {
-            return Err(-71);
+        if result > 0 {
+            Ok(result as u64)
+        } else {
+            Err(if result < 0 { result } else { -71 })
         }
-        Ok(stats)
+    }
+
+    /// Bind the complete notification token to its initial K0. Borrowed buffers
+    /// remain valid through synchronous copying and remain caller-owned afterward.
+    pub fn DfmNetBind(
+        &self,
+        generation: u64,
+        token: &[u8; 20],
+        initial_key: &[u8; 16],
+    ) -> Result<(), isize> {
+        let generation = type7_proxy::generation(generation)?;
+        type7_proxy::status(unsafe {
+            self.Invoke(
+                CMD_NET_SPOOF_BIND,
+                [
+                    SpoofType::Dfm as usize,
+                    generation,
+                    token.as_ptr() as usize,
+                    initial_key.as_ptr() as usize,
+                    0,
+                ],
+            )
+        })
+    }
+
+    /// Erase the proxy configuration and queued results. Previously claimed
+    /// sockets remain terminal until closed; restart with SET and a new socket.
+    pub fn DfmNetStop(&self, generation: u64) -> Result<(), isize> {
+        let generation = type7_proxy::generation(generation)?;
+        type7_proxy::status(unsafe {
+            self.Invoke(
+                CMD_NET_SPOOF_STOP,
+                [SpoofType::Dfm as usize, generation, 0, 0, 0],
+            )
+        })
+    }
+
+    /// Consume up to 16 verified Ks records. Pre-touch writable output for the
+    /// kernel's nofault copy. Clear the submitted capacity on errors, including
+    /// partial copies; entries beyond that capacity are untouched. Only the
+    /// returned count is valid. Failed copies consume records and count as drops.
+    pub fn DfmNetRead(
+        &self,
+        generation: u64,
+        records: &mut [Type7ProxyResult],
+    ) -> Result<Type7ProxyReadStats, isize> {
+        let generation = type7_proxy::generation(generation)?;
+        if records.is_empty() {
+            return Err(-22);
+        }
+        let capacity = records.len().min(TYPE7_PROXY_READ_MAX);
+        let submitted = &mut records[..capacity];
+        submitted.fill(Type7ProxyResult::default());
+        let mut dropped = 0_u64;
+        let result = unsafe {
+            self.Invoke(
+                CMD_NET_SPOOF_READ,
+                [
+                    SpoofType::Dfm as usize,
+                    generation,
+                    submitted.as_mut_ptr() as usize,
+                    capacity,
+                    &mut dropped as *mut u64 as usize,
+                ],
+            )
+        };
+        if result < 0 || result as usize > capacity {
+            submitted.fill(Type7ProxyResult::default());
+            return Err(if result < 0 { result } else { -71 });
+        }
+        Ok(Type7ProxyReadStats {
+            count: result as u32,
+            dropped,
+        })
     }
 
     pub fn RegisterPageBreak(&self, pid: i32, address: u64) -> Option<PageBreakHandle<T>>
@@ -922,27 +1031,25 @@ impl<T: KernelTransport> KernelDriver<T> {
 // Private LAN/VPN peers remain valid. The kernel additionally checks RTN_LOCAL
 // in the socket network namespace; userspace cannot infer the device addresses.
 fn tgcp_remote_ipv4(addr: &[u8; 16]) -> bool {
-    addr[0] != 0 && addr[0] != 127 && addr[0] < 224 && !(addr[0] == 169 && addr[1] == 254)
+    addr[..12] == [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff]
+        && addr[12] != 0
+        && addr[12] != 127
+        && addr[12] < 224
+        && !(addr[12] == 169 && addr[13] == 254)
 }
 
 // Match the kernel's canonical-encoding/range checks; this is not a primality
 // test. Comparing p > g + 1 avoids subtraction/underflow on caller input.
-fn tgcp_dh_parameters_valid(config: &TgcpMiddleConfig) -> bool {
-    let len = config.prime_len as usize;
-    if !(1..=config.prime.len()).contains(&len)
-        || config.prime[0] == 0
-        || config.prime[len - 1] & 1 == 0
-        || config.prime[len..].iter().any(|byte| *byte != 0)
-        || config.reserved != [0; 2]
-        || config.generator < 2
-    {
+fn tgcp_dh_parameters_valid(prime: &[u8], generator: u32) -> bool {
+    let len = prime.len();
+    if !(1..=64).contains(&len) || prime[0] == 0 || prime[len - 1] & 1 == 0 || generator < 2 {
         return false;
     }
     if len <= 8 {
-        let p = config.prime[..len]
+        let p = prime
             .iter()
             .fold(0u64, |value, byte| (value << 8) | u64::from(*byte));
-        p >= 5 && p > u64::from(config.generator) + 1
+        p >= 5 && p > u64::from(generator) + 1
     } else {
         true
     }

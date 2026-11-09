@@ -21,7 +21,6 @@ pub const CALL_MEMORY_USER: u8 = 8;
 pub const UDP_CAP_MAX_PAYLOAD: u32 = 2048;
 pub const UDP_CAP_READ_MAX: usize = 32;
 pub const UDP_CAP_F_TRUNC: u16 = 1;
-pub const RSA_REDIRECT_ABI_VERSION: u32 = 3;
 pub const RSA_REDIRECT_MAX_PROFILES: usize = 8;
 pub const RSA_REDIRECT_READ_MAX: usize = 16;
 pub const RSA_REDIRECT_MAX_ENTRY: usize = 4096;
@@ -76,18 +75,66 @@ pub const CMD_UDP_CAP_INIT: usize = CMD_TOUCH_EVENT_UPDATE_SCREEN_INFO + 1;
 pub const CMD_UDP_CAP_READ: usize = CMD_UDP_CAP_INIT + 1;
 pub const CMD_UDP_CAP_STOP: usize = CMD_UDP_CAP_READ + 1;
 pub const CMD_GYRO_EVENT_CONFIGURE: usize = CMD_UDP_CAP_STOP + 1;
-pub const CMD_RSA_REDIRECT_SET: usize = CMD_GYRO_EVENT_CONFIGURE + 1;
-pub const CMD_RSA_REDIRECT_DEL: usize = CMD_RSA_REDIRECT_SET + 1;
-pub const CMD_RSA_REDIRECT_READ: usize = CMD_RSA_REDIRECT_DEL + 1;
-pub const CMD_RSA_REDIRECT_STATS: usize = CMD_RSA_REDIRECT_READ + 1;
-pub const CMD_TGCP_MIDDLE_SET: usize = CMD_RSA_REDIRECT_STATS + 1;
+pub const CMD_NET_SPOOF_SET: usize = CMD_GYRO_EVENT_CONFIGURE + 1;
+pub const CMD_NET_SPOOF_STOP: usize = CMD_NET_SPOOF_SET + 1;
+pub const CMD_NET_SPOOF_READ: usize = CMD_NET_SPOOF_STOP + 1;
+pub const CMD_NET_SPOOF_STATS: usize = CMD_NET_SPOOF_READ + 1;
+pub const CMD_NET_SPOOF_BIND: usize = CMD_NET_SPOOF_STATS + 1;
+pub const CMD_TGCP_MIDDLE_SET: usize = CMD_NET_SPOOF_BIND + 1;
 pub const CMD_TGCP_MIDDLE_STOP: usize = CMD_TGCP_MIDDLE_SET + 1;
 pub const CMD_TGCP_MIDDLE_READ: usize = CMD_TGCP_MIDDLE_STOP + 1;
 pub const CMD_TGCP_MIDDLE_STATS: usize = CMD_TGCP_MIDDLE_READ + 1;
-pub const TGCP_MIDDLE_ABI_VERSION: u32 = 2;
+pub const CMD_READ_SPOOF_SET: usize = CMD_TGCP_MIDDLE_STATS + 1;
+pub const CMD_READ_SPOOF_STOP: usize = CMD_READ_SPOOF_SET + 1;
+pub const CMD_READ_SPOOF_SET_GROUP: usize = CMD_READ_SPOOF_STOP + 1;
+
+/// Adapter selector passed in the first direct argument slot of spoof commands.
+#[repr(usize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SpoofType {
+    Uam = 0,
+    Dfm = 1,
+}
+
+pub const SIGNS_REDIRECT_MAX_ENTRY: usize = 4096;
+pub const SIGNS_REDIRECT_GROUP_MAX: usize = 4;
+pub const TYPE7_PROXY_READ_MAX: usize = 16;
+
+/// A verified proxy exchange. `key` is the server-side Ks; the client retains
+/// its configured K0. IPv4 uses mapped IPv6 bytes; scalars are host-endian.
+/// No Debug implementation because this record contains a session key.
+#[repr(C, align(8))]
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub struct Type7ProxyResult {
+    pub sequence: u64,
+    pub timestamp_ns: u64,
+    pub socket_id: u64,
+    pub pid: u32,
+    pub local_port: u16,
+    pub remote_port: u16,
+    pub remote_addr: [u8; 16],
+    pub key: [u8; 16],
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Type7ProxyReadStats {
+    pub count: u32,
+    pub dropped: u64,
+}
+
+/// One borrowed member of a Signs SET_GROUP call. The kernel copies the
+/// descriptor and its byte buffers before returning; `reserved` must be zero.
+#[repr(C, align(8))]
+#[derive(Clone, Copy, Default)]
+pub struct SignsRedirectGroupEntry {
+    pub original_ptr: u64,
+    pub replacement_ptr: u64,
+    pub length: u32,
+    pub reserved: u32,
+}
+
 pub const TGCP_MIDDLE_READ_MAX: usize = 16;
 pub const TGCP_MIDDLE_MAX_PAYLOAD: usize = 4096;
-pub const TGCP_MIDDLE_F_AUTO_DISCOVER: u32 = 1;
 pub const TGCP_MIDDLE_EVENT_READY: u16 = 1;
 pub const TGCP_MIDDLE_EVENT_CLOSED: u16 = 2;
 pub const TGCP_MIDDLE_EVENT_ERROR: u16 = 3;
@@ -95,40 +142,6 @@ pub const TGCP_MIDDLE_EVENT_DATA: u16 = 4;
 pub const TGCP_MIDDLE_DATA_FIRST: u32 = 1;
 pub const TGCP_MIDDLE_DATA_LAST: u32 = 2;
 pub const TGCP_MIDDLE_STATUS_RUNNING: u32 = 1;
-pub const TGCP_MIDDLE_STATUS_TARGET_DEAD: u32 = 2;
-
-#[repr(C)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct TgcpMiddleConfig {
-    pub abi_version: u32,
-    pub pid: i32,
-    pub family: u16,
-    pub remote_port: u16,
-    pub flags: u32,
-    pub remote_addr: [u8; 16],
-    pub prime_len: u32,
-    pub generator: u32,
-    /// Canonical shortest big-endian p, followed by zeros. No default group.
-    pub prime: [u8; 64],
-    pub reserved: [u32; 2],
-}
-
-impl Default for TgcpMiddleConfig {
-    fn default() -> Self {
-        Self {
-            abi_version: 0,
-            pid: 0,
-            family: 0,
-            remote_port: 0,
-            flags: 0,
-            remote_addr: [0; 16],
-            prime_len: 0,
-            generator: 0,
-            prime: [0; 64],
-            reserved: [0; 2],
-        }
-    }
-}
 
 /// Only READY carries keys. DATA is the exact client-facing (Kc) ciphertext.
 /// Deliberately no Debug implementation: records may contain session secrets.
@@ -139,6 +152,7 @@ pub struct TgcpMiddleEvent {
     pub session_id: u64,
     pub socket_id: u64,
     pub ts_ns: u64,
+    /// Observed connector TGID; never a configured admission filter.
     pub target_pid: u32,
     pub sock_uid: u32,
     pub family: u16,
@@ -148,9 +162,8 @@ pub struct TgcpMiddleEvent {
     pub local_addr: [u8; 16],
     pub remote_addr: [u8; 16],
     pub kc: [u8; 16],
-    pub ks: [u8; 16],
     pub error: i32,
-    pub reserved: u32,
+    pub key_mode: u32,
     pub stream_offset: u64,
     pub payload_len: u32,
     pub flags: u32,
@@ -173,27 +186,14 @@ impl Default for TgcpMiddleEvent {
             local_addr: [0; 16],
             remote_addr: [0; 16],
             kc: [0; 16],
-            ks: [0; 16],
             error: 0,
-            reserved: 0,
+            key_mode: 0,
             stream_offset: 0,
             payload_len: 0,
             flags: 0,
             payload: [0; TGCP_MIDDLE_MAX_PAYLOAD],
         }
     }
-}
-
-#[repr(C, align(8))]
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
-pub struct TgcpMiddleReadRequest {
-    pub abi_version: u32,
-    pub max_count: u32,
-    pub records: u64,
-    pub out_count: u32,
-    pub reserved: u32,
-    pub dropped: u64,
-    pub session_id: u64,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -206,8 +206,8 @@ pub struct TgcpMiddleReadStats {
 #[repr(C, align(8))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct TgcpMiddleStats {
-    pub abi_version: u32,
     pub status: u32,
+    pub padding: u32,
     pub session_id: u64,
     pub emitted: u64,
     pub dropped: u64,
@@ -215,8 +215,6 @@ pub struct TgcpMiddleStats {
     pub queued_events: u32,
     pub send_hits: u64,
     pub recv_hits: u64,
-    pub target_pid: u32,
-    pub reserved: u32,
 }
 
 pub const GYRO_EVENT_ONCE: u32 = 1 << 0;
@@ -342,21 +340,17 @@ pub struct UdpCapReadStats {
     pub captured: u64,
 }
 
-/// Wire layout of kernel rsa_redirect_config, ABI 3. Use RsaRedirectConfig
-/// and KernelDriver::RsaRedirectSet to keep all pointed-to buffers borrowed.
+/// Wire layout of kernel rsa_redirect_config. Use RsaRedirectConfig
+/// and KernelDriver::UamNetSet to keep all pointed-to buffers borrowed.
 #[repr(C, align(8))]
 #[derive(Clone, Copy, Default)]
 pub struct RsaRedirectSetRequest {
-    pub abi_version: u32,
     pub flags: u32,
     pub expected_crc: u32,
     pub original_crc: u32,
     pub key_id: u32,
     pub capture_pid: i32,
     pub entry_len: u32,
-    /// C padding before __aligned_u64 entry_offset, also explicit on 32-bit hosts.
-    pub _padding: u32,
-    pub entry_offset: u64,
     pub private_der: u64,
     pub public_der: u64,
     pub original_entry: u64,
@@ -366,47 +360,20 @@ pub struct RsaRedirectSetRequest {
     pub reserved: [u32; 2],
 }
 
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct RsaRedirectDeleteRequest {
-    pub abi_version: u32,
-    pub expected_crc: u32,
-    pub reserved: [u32; 2],
-}
-
-/// A successfully submitted rewrapped UDP Hello. Addresses are network-order
-/// bytes; ports and scalar fields are host-endian. No Debug to avoid logging
+/// A successfully submitted rewrapped UDP Hello. The remote address contains
+/// IPv6 network-order bytes; IPv4 uses ::ffff:a.b.c.d. Scalar fields are
+/// host-endian. Profile ownership is kernel-private. No Debug to avoid logging
 /// the session key and nonce accidentally. Sequence supports retry deduplication.
 #[repr(C, align(8))]
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub struct RsaRedirectResult {
     pub sequence: u64,
     pub timestamp_ns: u64,
-    pub uid: u32,
     pub pid: i32,
-    pub tid: i32,
-    pub expected_crc: u32,
-    pub original_crc: u32,
-    pub network_version: u32,
-    pub family: u16,
-    pub local_port: u16,
-    pub remote_port: u16,
-    pub key_id: u16,
-    pub local_addr: [u8; 16],
     pub remote_addr: [u8; 16],
     pub key: [u8; 32],
     pub nonce: [u8; 8],
-}
-
-#[repr(C, align(8))]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct RsaRedirectReadRequest {
-    pub abi_version: u32,
-    pub max_count: u32,
-    pub records: u64,
-    pub out_count: u32,
-    pub reserved: u32,
-    pub dropped: u64,
+    pub _padding: [u8; 4],
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -418,8 +385,8 @@ pub struct RsaRedirectReadStats {
 #[repr(C, align(8))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct RsaRedirectStats {
-    pub abi_version: u32,
     pub profiles: u32,
+    pub _padding: u32,
     pub rewrapped: u64,
     pub crypto_failed: u64,
     pub send_failed: u64,
