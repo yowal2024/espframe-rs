@@ -17,6 +17,8 @@ pub const CALL_MEMORY_WRITE: u8 = 1;
 pub const CALL_MEMORY_NO_CACHE: u8 = 2;
 pub const CALL_MEMORY_IO: u8 = 4;
 pub const CALL_MEMORY_USER: u8 = 8;
+/// Opt-in clean to PoC before a cached kernel-to-user read.
+pub const CALL_MEMORY_DCACHE: u8 = 16;
 
 pub const UDP_CAP_MAX_PAYLOAD: u32 = 2048;
 pub const UDP_CAP_READ_MAX: usize = 32;
@@ -231,6 +233,10 @@ bitflags::bitflags! {
         const NoCache = CALL_MEMORY_NO_CACHE;
         const Io = CALL_MEMORY_IO;
         const User = CALL_MEMORY_USER;
+        /// Clean source D-cache lines to PoC before copying a cached read to user memory.
+        /// Requires kernel support; ignored for Write, NoCache, or non-user destinations.
+        /// The public memory syscall adds User internally. Existing modes do not opt in.
+        const Dcache = CALL_MEMORY_DCACHE;
     }
 }
 

@@ -62,6 +62,17 @@ Android 使用 ARM64、API 31 起的构建配置。Windows 上的 NDK、libclang
 | `xdl`、`soloader` | 动态符号和 ELF 加载 |
 | `sensor`、`gyro_aim` | 传感器与角速度控制 |
 
+## 可选的 D-cache 清理读取
+
+配套内核支持 `CallMemory_Dcache = 0x10` 时，可通过
+`CallMemoryFlags::Read | CallMemoryFlags::Dcache` 显式开启读取前的缓存清理。
+内核仅在普通读取到用户缓冲区时执行 `dc cvac` 和 `dsb sy`；写入、
+`NoCache`（包括 `NoCache | Io`）和内核目标缓冲区均不执行。
+公开的内存调用入口会在内核内部补上 `CallMemory_User`，调用方无需手动设置。
+
+`CallMemoryFlags::for_mem_mode()` 和默认读取行为保持原样，不自动开启该标志。
+清理到一致性点不保证游戏相机与显示画面同帧，也不保证降低延迟。
+
 ## RSA redirect 内核接口
 
 `kernel::KernelDriver` 通过统一的 `CMD_NET_SPOOF_*` 命令提供 UAM 网络接口，
