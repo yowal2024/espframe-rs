@@ -80,14 +80,14 @@ fn unified_direct_call_layout_and_compacted_command_sequence_match_c() {
     assert_eq!(offset_of!(TgcpMiddleEvent, key_mode), 100);
     assert_eq!(offset_of!(TgcpMiddleEvent, stream_offset), 104);
     assert_eq!(offset_of!(TgcpMiddleEvent, payload), 120);
-    assert_eq!(CMD_UDP_CAP_INIT, 0x10039);
-    assert_eq!(CMD_GYRO_EVENT_CONFIGURE, 0x1003c);
-    assert_eq!(CMD_NET_SPOOF_SET, 0x1003d);
-    assert_eq!(CMD_NET_SPOOF_STATS, 0x10040);
-    assert_eq!(CMD_TGCP_MIDDLE_SET, 0x10042);
-    assert_eq!(CMD_TGCP_MIDDLE_STOP, 0x10043);
-    assert_eq!(CMD_TGCP_MIDDLE_READ, 0x10044);
-    assert_eq!(CMD_TGCP_MIDDLE_STATS, 0x10045);
+    assert_eq!(CMD_UDP_CAP_INIT, 0x10025);
+    assert_eq!(CMD_GYRO_EVENT_CONFIGURE, 0x10028);
+    assert_eq!(CMD_NET_SPOOF_SET, 0x10029);
+    assert_eq!(CMD_NET_SPOOF_STATS, 0x1002c);
+    assert_eq!(CMD_TGCP_MIDDLE_SET, 0x1002e);
+    assert_eq!(CMD_TGCP_MIDDLE_STOP, 0x1002f);
+    assert_eq!(CMD_TGCP_MIDDLE_READ, 0x10030);
+    assert_eq!(CMD_TGCP_MIDDLE_STATS, 0x10031);
 }
 
 #[test]
@@ -98,7 +98,7 @@ fn set_passes_only_borrowed_prime_length_and_generator_directly() {
         456,
         999,
         Transport(|command, args: [usize; 5]| {
-            assert_eq!(command, 0x10042);
+            assert_eq!(command, 0x1002e);
             assert_eq!(&args[1..], &[1, 5, 0, 0]);
             let prime = unsafe { std::slice::from_raw_parts(args[0] as *const u8, args[1]) };
             assert_eq!(prime, [23]);
@@ -130,7 +130,7 @@ fn read_preserves_response_mode_and_client_side_data_in_one_ordered_batch() {
         456,
         42,
         Transport(|command, args: [usize; 5]| {
-            assert_eq!(command, 0x10044);
+            assert_eq!(command, 0x10030);
             assert_eq!((args[1], args[4]), (16, 0));
             let out = unsafe { std::slice::from_raw_parts_mut(args[0] as *mut TgcpMiddleEvent, 2) };
             out[0] = ready();
@@ -215,7 +215,7 @@ fn unsupported_kernel_and_stop_propagate_without_invoking_udp() {
         456,
         42,
         Transport(|command, _| {
-            assert!(matches!(command, 0x10042..=0x10045));
+            assert!(matches!(command, 0x1002e..=0x10031));
             -38
         }),
     );

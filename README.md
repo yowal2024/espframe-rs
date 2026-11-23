@@ -77,7 +77,7 @@ Android 使用 ARM64、API 31 起的构建配置。Windows 上的 NDK、libclang
 
 `kernel::KernelDriver` 通过统一的 `CMD_NET_SPOOF_*` 命令提供 UAM 网络接口，
 首参数固定为 `SpoofType::Uam`（0）；命令接在 `CMD_GYRO_EVENT_CONFIGURE` 后
-连续递增（`0x1003d`–`0x10040`）。需要配套使用统一 TYPE 布局的内核模块，
+连续递增（`0x10029`–`0x1002c`）。需要配套使用统一 TYPE 布局的内核模块，
 目标 UID 仍通过内核已有 `add_black_user` 路径登记。
 这些方法不使用 `KernelDriver::Pid()`，也不接收包名或文件描述符。
 
@@ -142,6 +142,65 @@ APK 与内核须按同一调用约定配套升级，无旧结构回退。RSA 沿
 
 针对接口的宿主机测试：`cargo test --locked -p espframe --no-default-features --test kernel_rsa_redirect`。
 这组测试使用 transport 替身验证真实驱动封装，不代表已在 Android 设备上调用新版内核。
+
+## 2026-11-20 TTBR0 内核调用约定
+
+绑定与 `/root/kernel/core/commands.h` 同步。只给首个命令基值，后续按声明顺序递增。
+旧 HBRK、page/DBI/MMU break 和 shadow hook 已随内核删除；不保留占位编号或旧命令回退。
+新内核必须与本次绑定同时部署，旧 APK/内核混用不兼容。
+
+| 接口 | 命令范围 |
+| --- | --- |
+| TTBR0 register / unregister | `0x10021..0x10022` |
+| touch | `0x10023..0x10024` |
+| UDP capture | `0x10025..0x10027` |
+| gyro | `0x10028` |
+| NET SET/STOP/READ/STATS/BIND | `0x10029..0x1002d` |
+| TGCP | `0x1002e..0x10031` |
+| READ_SPOOF | `0x10032..0x10034` |
+
+`unsafe RegisterTtbr0HookRaw(pid, address, replace, params, install_type)` 传递五个直接参数，返回
+非零 handle，拒绝时保留内核的 0／负 errno。`RegisterTtbr0Hook` 返回带 Drop 兜底的
+`Ttbr0HookHandle`；显式 `Unregister()` 仅在返回 1 时释放所有权，失败可重试。
+这里的 `pid` 是选中的 TID，支持非线程组 leader；同一地址空间只绑定一个选中线程，
+其余线程不会自动执行回调。需要配套部署支持非 leader 选择的新内核模块。
+`GetThreadByComm(process_pid, c"GameThread")` 复用 `CMD_GET_THREAD_BY_COMM`，
+只在指定进程的线程组内返回第一个精确 comm 匹配。名称不是唯一身份；调用方仍需验证采样。
+该封装提供完整的 64 字节初始化缓冲区，满足现有内核固定读取 63 字节的约定。
+`replace` 和 `params` 都是目标进程地址。默认完整上下文为 `Ttbr0HookContext`，大小
+`0x320`；Q0 位于 `0x110`，FPCR/PC 位于 `0x310/0x318`。PC 只供观察，不跳过原指令。
+帧只能在回调内使用；自行把需要的寄存器复制到目标进程的结果区，再通过内存接口读回。
+
+`install_type` 使用 `Ttbr0HookType::Full = 0` 或 `Ttbr0HookType::Leaf = 1`，对应
+`xCall` 的 `arg7`。`replace` 始终是原始的四字节对齐地址，不再使用指针低位标签；
+内核校验完整 64 位 type，未知值返回 0。内核与调用方须配套更新，不做旧接口回退。
+
+类型也从 `espframe::kernel` 直接导出，完整上下文调用示例：
+
+```rust
+use espframe::kernel::Ttbr0HookType;
+
+let mut hook = unsafe {
+    driver.RegisterTtbr0Hook(tid, address, callback, params, Ttbr0HookType::Full)?
+};
+// 在 hook 生效期间保留句柄；需要拆除时显式调用，可处理错误并重试。
+hook.Unregister()?;
+```
+
+汇编 leaf 回调改传 `Ttbr0HookType::Leaf`；Raw 接口使用相同的五参数顺序。
+
+`Ttbr0HookType::Leaf` 选择汇编 leaf ABI：X17=params，X16 为临时寄存器，
+X30 为回调返回地址，原 X16/X17/LR 在入口 SP 的 0/8/16 字节处；原 SP=入口 SP+32。
+其他寄存器、NZCV、SIMD/FP 都是活动原值，临时修改须自行保存恢复，不能强转 C 回调。
+params 原样传递，不加标签。库不实现游戏业务采样逻辑。
+
+当前后端每个地址空间选择一个 TID，每个 mm/page 只允许一个 hook，最多八页。
+目标与回调代码必须驻留且可执行，必须检查当前内核的硬件 PAN、KPTI、4 KiB 页等限制。
+`RemoteMmapForPid` 可为指定目标申请 backing；此版 xCall 没有 unmap，调用方应有界复用，
+并让内核在目标退出时回收。注销不代表所有 EL0 回调已返回，代码／参数不能提前释放。
+
+测试：`cargo test --locked --all-features`；定向 ABI/生命周期测试见
+`tests/kernel_ttbr0.rs`。这些宿主替身测试不等于 Android 真机／SELinux 验证。
 
 ## 来源
 

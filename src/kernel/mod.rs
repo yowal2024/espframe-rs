@@ -11,11 +11,8 @@ mod type7_proxy;
 #[cfg(any(test, target_os = "android"))]
 mod worker;
 
-pub use abi::SpoofType;
-pub use driver::{
-    KernelDriver, MmuBreakHandle, ModuleBaseLookup, PageBreakHandle, ShadowBreakHandle,
-    ShadowHookHandle,
-};
+pub use abi::{SpoofType, Ttbr0HookType};
+pub use driver::{KernelDriver, ModuleBaseLookup, Ttbr0HookHandle};
 pub use memory_flags::SharedMemoryFlags;
 pub use root_shell::{run_root_command, RootShell, SystemRootShell};
 pub use rsa_redirect::{RsaRedirectConfig, RsaRedirectFile};

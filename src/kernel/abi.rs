@@ -27,9 +27,6 @@ pub const RSA_REDIRECT_MAX_PROFILES: usize = 8;
 pub const RSA_REDIRECT_READ_MAX: usize = 16;
 pub const RSA_REDIRECT_MAX_ENTRY: usize = 4096;
 pub const RSA_REDIRECT_F_FILE: u32 = 1;
-pub const MEM_CAPTURE_MAX_GROUPS: usize = 6;
-pub const MEM_CAPTURE_MAX_BYTES: usize = 64;
-pub const MEM_MODIFY_MAX_GROUPS: usize = 6;
 
 pub const CMD_GRANT_SU: usize = 0x10010;
 pub const CMD_IS_ENABLE_SU: usize = CMD_GRANT_SU + 1;
@@ -49,29 +46,9 @@ pub const CMD_GET_MODULE_BASE_BY_PID_NAME: usize = CMD_GET_MOUDLE_BASE_BY_PID_NA
 pub const CMD_CALL_MEMORY: usize = CMD_GET_MODULE_BASE_BY_PID_NAME + 1;
 pub const CMD_REMOTE_MMAP: usize = CMD_CALL_MEMORY + 1;
 pub const CMD_GET_MEM_INFO: usize = CMD_REMOTE_MMAP + 1;
-pub const CMD_REGISTER_HBRK: usize = CMD_GET_MEM_INFO + 1;
-pub const CMD_UNREGISTER_HBRK: usize = CMD_REGISTER_HBRK + 1;
-pub const CMD_SET_HBRK_REGS: usize = CMD_UNREGISTER_HBRK + 1;
-pub const CMD_PAUSE_HBRK: usize = CMD_SET_HBRK_REGS + 1;
-pub const CMD_RESUME_HBRK: usize = CMD_PAUSE_HBRK + 1;
-pub const CMD_HBRK_SET_SHARED: usize = CMD_RESUME_HBRK + 1;
-pub const CMD_HBRK_CLEAR_SHARED: usize = CMD_HBRK_SET_SHARED + 1;
-pub const CMD_HBRK_SET_MEM_CAPTURE: usize = CMD_HBRK_CLEAR_SHARED + 1;
-pub const CMD_HBRK_CLEAR_MEM_CAPTURE: usize = CMD_HBRK_SET_MEM_CAPTURE + 1;
-pub const CMD_HBRK_SET_MEM_MODIFY: usize = CMD_HBRK_CLEAR_MEM_CAPTURE + 1;
-pub const CMD_HBRK_CLEAR_MEM_MODIFY: usize = CMD_HBRK_SET_MEM_MODIFY + 1;
-pub const CMD_REGISTER_PAGE_HBRK: usize = CMD_HBRK_CLEAR_MEM_MODIFY + 1;
-pub const CMD_UNREGISTER_PAGE_HBRK: usize = CMD_REGISTER_PAGE_HBRK + 1;
-pub const CMD_SET_PAGE_HBRK_REGS: usize = CMD_UNREGISTER_PAGE_HBRK + 1;
-pub const CMD_REGISTER_DBI_HBRK: usize = CMD_SET_PAGE_HBRK_REGS + 1;
-pub const CMD_UNREGISTER_DBI_HBRK: usize = CMD_REGISTER_DBI_HBRK + 1;
-pub const CMD_REGISTER_SHADOW_HOOK: usize = CMD_UNREGISTER_DBI_HBRK + 1;
-pub const CMD_UNREGISTER_SHADOW_HOOK: usize = CMD_REGISTER_SHADOW_HOOK + 1;
-pub const CMD_REGISTER_MMU_BRK: usize = CMD_UNREGISTER_SHADOW_HOOK + 1;
-pub const CMD_UNREGISTER_MMU_BRK: usize = CMD_REGISTER_MMU_BRK + 1;
-pub const CMD_SET_MMU_BRK_SHARED: usize = CMD_UNREGISTER_MMU_BRK + 1;
-pub const CMD_ARM_MMU_BRK: usize = CMD_SET_MMU_BRK_SHARED + 1;
-pub const CMD_CREATE_TOUCH_EVENT_LISTENER: usize = CMD_ARM_MMU_BRK + 1;
+pub const CMD_REGISTER_TTBR0_HOOK: usize = CMD_GET_MEM_INFO + 1;
+pub const CMD_UNREGISTER_TTBR0_HOOK: usize = CMD_REGISTER_TTBR0_HOOK + 1;
+pub const CMD_CREATE_TOUCH_EVENT_LISTENER: usize = CMD_UNREGISTER_TTBR0_HOOK + 1;
 pub const CMD_TOUCH_EVENT_UPDATE_SCREEN_INFO: usize = CMD_CREATE_TOUCH_EVENT_LISTENER + 1;
 pub const CMD_UDP_CAP_INIT: usize = CMD_TOUCH_EVENT_UPDATE_SCREEN_INFO + 1;
 pub const CMD_UDP_CAP_READ: usize = CMD_UDP_CAP_INIT + 1;
@@ -471,212 +448,49 @@ pub enum ProcessPauthOperation {
     Autdb = 8,
 }
 
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct PtRegsSet {
-    pub enable_regs: [bool; 31],
-    pub enable_sp: bool,
-    pub enable_pc: bool,
-    pub enable_pstate: bool,
-    pub enable_orig_x0: bool,
-    pub enable_syscallno: bool,
-    pub regs: [u64; 31],
-    pub sp: u64,
-    pub pc: u64,
-    pub pstate: u64,
-    pub orig_x0: u64,
-    pub syscallno: u64,
+/// Fifth direct TTBR0 registration argument; callback addresses are never tagged.
+#[repr(u64)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Ttbr0HookType {
+    Full = 0,
+    Leaf = 1,
 }
+pub const TTBR0_HOOK_MAX_PAGES: usize = 8;
 
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub union RegModifyValue {
-    pub int32_val: u32,
-    pub int64_val: u64,
-    pub float_val: f32,
-    pub double_val: f64,
-}
-
-impl Default for RegModifyValue {
-    fn default() -> Self {
-        Self { int64_val: 0 }
-    }
-}
-
+/// Full EL0 callback frame from supercall/ttbr0_hook.h; not Linux pt_regs.
+/// Only valid during replace(params, context). Original PC is informational.
+/// Deliberate register edits are restored before replaying the original instruction.
+/// No Debug implementation: the frame can contain session keys.
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
-pub struct RegModifyConfig {
-    pub reg_index: i32,
-    pub reg_type: u8,
-    pub _pad: [u8; 3],
-    pub value: RegModifyValue,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct MemCaptureConfig {
-    pub base_reg: u8,
-    pub _pad0: [u8; 3],
-    pub offset: i32,
-    pub length: u8,
-    pub indirect: u8,
-    pub reserved: u8,
-    pub _pad1: u8,
-    pub deref_offset: i32,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct MemCaptureResult {
-    pub address: u64,
-    pub data: [u8; MEM_CAPTURE_MAX_BYTES],
-    pub length: u8,
-    pub success: u8,
-    pub _pad: [u8; 6],
-}
-
-impl Default for MemCaptureResult {
-    fn default() -> Self {
-        Self {
-            address: 0,
-            data: [0; MEM_CAPTURE_MAX_BYTES],
-            length: 0,
-            success: 0,
-            _pad: [0; 6],
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct MemModifyConfig {
-    pub base_reg: u8,
-    pub _pad: [u8; 3],
-    pub offset: i32,
-    pub data_type: u8,
-    pub mode: u8,
-    pub param_slot: u8,
-    pub indirect: u8,
-    pub deref_offset: i32,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub union MemModifySlot {
-    pub i32: i32,
-    pub i64: i64,
-    pub f32: f32,
-    pub f64: f64,
-    pub raw: u64,
-}
-
-impl Default for MemModifySlot {
-    fn default() -> Self {
-        Self { raw: 0 }
-    }
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct HwbpHitItem {
-    pub hit_index: u64,
-    pub regs: [u64; 31],
+pub struct Ttbr0HookContext {
+    pub x: [u64; 31],
     pub sp: u64,
+    pub nzcv: u64,
+    pub fpsr: u64,
+    pub q: [[u64; 2]; 32],
+    pub fpcr: u64,
     pub pc: u64,
-    pub pstate: u64,
-    pub reserved: [u64; 2],
-    pub mem_capture_count: u8,
-    pub _pad: [u8; 7],
-    pub mem_captures: [MemCaptureResult; MEM_CAPTURE_MAX_GROUPS],
 }
 
-impl Default for HwbpHitItem {
-    fn default() -> Self {
-        Self {
-            hit_index: 0,
-            regs: [0; 31],
-            sp: 0,
-            pc: 0,
-            pstate: 0,
-            reserved: [0; 2],
-            mem_capture_count: 0,
-            _pad: [0; 7],
-            mem_captures: [MemCaptureResult::default(); MEM_CAPTURE_MAX_GROUPS],
-        }
-    }
-}
-
+/// Leaf entry: X17=params, X16=scratch, X30=callback return; all other
+/// registers and flags are live. Original SP=entry SP+32. Restore temporary
+/// clobbers and return with entry SP unchanged. Never cast a C callback to leaf.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct HwbpSharedHeader {
-    pub write_idx: u32,
-    pub capacity: u32,
-    pub reserved: [u32; 6],
+#[derive(Clone, Copy, Default)]
+pub struct Ttbr0LeafFrame {
+    pub x16: u64,
+    pub x17: u64,
+    pub lr: u64,
+    pub reserved: u64,
 }
 
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct HbrkSharedRequest {
-    pub handle: usize,
-    pub shared_buf_addr: u64,
-    pub shared_buf_size: u64,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct HbrkMemCaptureRequest {
-    pub handle: usize,
-    pub count: u8,
-    pub _pad: [u8; 7],
-    pub configs: [MemCaptureConfig; MEM_CAPTURE_MAX_GROUPS],
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct HbrkMemModifyRequest {
-    pub handle: usize,
-    pub count: u8,
-    pub _pad: [u8; 7],
-    pub configs: [MemModifyConfig; MEM_MODIFY_MAX_GROUPS],
-}
-
-#[repr(u8)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum MmuBreakOpKind {
-    #[default]
-    F32 = 0,
-    F64 = 1,
-    U32 = 2,
-    U64 = 3,
-}
-
-#[repr(u8)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum MmuBreakOpAction {
-    #[default]
-    Overwrite = 0,
-    AddClear = 1,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct MmuBreakOpConfig {
-    pub base_reg: u8,
-    pub kind: MmuBreakOpKind,
-    pub action: MmuBreakOpAction,
-    pub _pad: u8,
-    pub offset: i32,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct MmuBreakSharedConfig {
-    pub handle: u64,
-    pub shared_va: u64,
-    pub count: u8,
-    pub _pad: [u8; 7],
-    pub ops: [MmuBreakOpConfig; 4],
-}
+const _: () = {
+    assert!(core::mem::size_of::<Ttbr0HookContext>() == 0x320);
+    assert!(core::mem::offset_of!(Ttbr0HookContext, q) == 0x110);
+    assert!(core::mem::offset_of!(Ttbr0HookContext, pc) == 0x318);
+    assert!(core::mem::size_of::<Ttbr0LeafFrame>() == 32);
+};
 
 pub const fn CanonicalizeAddress(address: u64) -> u64 {
     address & ADDRESS_MASK

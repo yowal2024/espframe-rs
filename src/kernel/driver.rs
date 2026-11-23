@@ -382,6 +382,21 @@ impl<T: KernelTransport> KernelDriver<T> {
         unsafe { self.Invoke(CMD_GET_TASK_BY_NAME, [name.as_ptr() as usize, 0, 0, 0, 0]) as i32 }
     }
 
+    /// Find the first exact comm match within this process's thread group.
+    /// Names are limited to Linux TASK_COMM_LEN minus its terminating NUL.
+    /// A comm match is a selection hint, not a unique thread identity.
+    pub fn GetThreadByComm(&self, pid: i32, name: &CStr) -> Result<i32, isize> {
+        let bytes = name.to_bytes();
+        if pid <= 1 || bytes.is_empty() || bytes.len() > 15 { return Err(-22); }
+        // The existing kernel command copies 63 bytes, even for short names.
+        let mut buffer = [0u8; 64];
+        buffer[..bytes.len()].copy_from_slice(bytes);
+        let result = unsafe { self.Invoke(CMD_GET_THREAD_BY_COMM,
+            [pid as usize, buffer.as_ptr() as usize, 0, 0, 0]) };
+        if result > 1 && result <= i32::MAX as isize { Ok(result as i32) }
+        else { Err(if result < 0 { result } else { -71 }) }
+    }
+
     pub fn ModuleBaseByPidName(&self, pid: i32, module_name: &str) -> Option<u64> {
         match self.ModuleBaseByPidNameTyped(pid, module_name) {
             ModuleBaseLookup::Ready(base) => Some(base),
@@ -935,97 +950,77 @@ impl<T: KernelTransport> KernelDriver<T> {
         })
     }
 
-    pub fn RegisterPageBreak(&self, pid: i32, address: u64) -> Option<PageBreakHandle<T>>
-    where
-        T: Clone,
-    {
-        self.RegisterOwned(pid, address, CMD_REGISTER_PAGE_HBRK)
-            .map(|handle| PageBreakHandle {
-                owner: BreakOwner::new(
-                    self.scno,
-                    self.option,
-                    handle,
-                    CMD_UNREGISTER_PAGE_HBRK,
-                    self.transport.clone(),
-                ),
-            })
-    }
-
-    pub fn RegisterMmuBreak(&self, pid: i32, address: u64) -> Option<MmuBreakHandle<T>>
-    where
-        T: Clone,
-    {
-        self.RegisterOwned(pid, address, CMD_REGISTER_MMU_BRK)
-            .map(|handle| MmuBreakHandle {
-                owner: BreakOwner::new(
-                    self.scno,
-                    self.option,
-                    handle,
-                    CMD_UNREGISTER_MMU_BRK,
-                    self.transport.clone(),
-                ),
-            })
-    }
-
-    pub fn RegisterShadowBreak(&self, pid: i32, address: u64) -> Option<ShadowBreakHandle<T>>
-    where
-        T: Clone,
-    {
-        self.RegisterOwned(pid, address, CMD_REGISTER_HBRK)
-            .map(|handle| ShadowBreakHandle {
-                owner: BreakOwner::new(
-                    self.scno,
-                    self.option,
-                    handle,
-                    CMD_UNREGISTER_HBRK,
-                    self.transport.clone(),
-                ),
-            })
-    }
-
-    pub fn RegisterShadowHook(
-        &self,
-        pid: i32,
-        address: u64,
-        callback: u64,
-        params: u64,
-    ) -> Option<ShadowHookHandle<T>>
-    where
-        T: Clone,
-    {
-        if pid <= 0 || address == 0 {
-            return None;
+    /// Install a full-context or assembly leaf EL0 callback using an explicit type.
+    ///
+    /// # Safety
+    /// `replace` and `params` are addresses in `pid`, not this process. The
+    /// caller must provide valid executable code with the selected ABI, fault
+    /// in the target/code pages and keep code/storage alive for all in-flight
+    /// callbacks, including after detach. `pid` is the selected TID (leader or
+    /// nonleader); only that task runs it. One selected TID per address space.
+    pub unsafe fn RegisterTtbr0HookRaw(
+        &self, pid: i32, address: u64, replace: u64, params: u64, install_type: Ttbr0HookType,
+    ) -> Result<u64, isize> {
+        if pid <= 1 || address == 0 || address & 3 != 0 || replace == 0 || replace & 3 != 0 {
+            return Err(-22);
         }
-        let result = unsafe {
-            self.Invoke(
-                CMD_REGISTER_SHADOW_HOOK,
-                [
-                    pid as usize,
-                    address as usize,
-                    callback as usize,
-                    params as usize,
-                    0,
-                ],
-            )
-        };
-        (result > 0).then(|| ShadowHookHandle {
-            owner: BreakOwner::new(
-                self.scno,
-                self.option,
-                result as u64,
-                CMD_UNREGISTER_SHADOW_HOOK,
-                self.transport.clone(),
-            ),
-        })
+        let result = unsafe { self.Invoke(CMD_REGISTER_TTBR0_HOOK,
+            [pid as usize, address as usize, replace as usize, params as usize, install_type as usize]) };
+        if result > 0 { Ok(result as u64) } else { Err(result) }
     }
 
-    fn RegisterOwned(&self, pid: i32, address: u64, command: usize) -> Option<u64> {
-        if pid <= 0 || address == 0 {
-            return None;
-        }
-        let result = unsafe { self.Invoke(command, [pid as usize, address as usize, 0, 0, 0]) };
-        (result > 0).then_some(result as u64)
+    /// Remove just this registration. False/stale handles are not success.
+    /// Detach does not free caller-owned remote code or storage.
+    pub fn UnregisterTtbr0Hook(&self, handle: u64) -> Result<(), isize> {
+        if handle == 0 { return Err(-22); }
+        let result = unsafe { self.Invoke(CMD_UNREGISTER_TTBR0_HOOK,
+            [handle as usize, 0, 0, 0, 0]) };
+        if result == 1 { Ok(()) } else { Err(result) }
     }
+
+    /// Owned registration with explicit, retryable detach and a Drop fallback.
+    ///
+    /// # Safety
+    /// Same address, callback ABI and lifetime contract as RegisterTtbr0HookRaw.
+    pub unsafe fn RegisterTtbr0Hook(
+        &self, pid: i32, address: u64, replace: u64, params: u64, install_type: Ttbr0HookType,
+    ) -> Result<Ttbr0HookHandle<T>, isize> where T: Clone {
+        let handle = unsafe { self.RegisterTtbr0HookRaw(pid, address, replace, params, install_type)? };
+        Ok(Ttbr0HookHandle { driver: self.clone(), handle })
+    }
+
+    /// Allocate target-owned backing. The current xCall ABI has no unmap;
+    /// callers must bound/reuse allocations and retain them until target exit.
+    pub fn RemoteMmapForPid(&self, pid: i32, name: &CStr, len: u64, flags: u64) -> Result<u64, isize> {
+        if pid <= 1 || len == 0 || len > isize::MAX as u64
+            || flags & !u64::from(VM_READ | VM_WRITE | VM_EXEC) != 0 {
+            return Err(-22);
+        }
+        let result = unsafe { self.Invoke(CMD_REMOTE_MMAP,
+            [pid as usize, len as usize, flags as usize, name.as_ptr() as usize, 0]) };
+        if result > 0 { Ok(result as u64) } else { Err(result) }
+    }
+}
+
+pub struct Ttbr0HookHandle<T: KernelTransport> {
+    driver: KernelDriver<T>,
+    handle: u64,
+}
+
+impl<T: KernelTransport> Ttbr0HookHandle<T> {
+    pub fn RawHandle(&self) -> u64 { self.handle }
+
+    /// A failed removal retains ownership so the caller can retry.
+    pub fn Unregister(&mut self) -> Result<(), isize> {
+        if self.handle == 0 { return Ok(()); }
+        self.driver.UnregisterTtbr0Hook(self.handle)?;
+        self.handle = 0;
+        Ok(())
+    }
+}
+
+impl<T: KernelTransport> Drop for Ttbr0HookHandle<T> {
+    fn drop(&mut self) { let _ = self.Unregister(); }
 }
 
 // Private LAN/VPN peers remain valid. The kernel additionally checks RTN_LOCAL
@@ -1052,133 +1047,5 @@ fn tgcp_dh_parameters_valid(prime: &[u8], generator: u32) -> bool {
         p >= 5 && p > u64::from(generator) + 1
     } else {
         true
-    }
-}
-
-struct BreakOwner<T: KernelTransport> {
-    scno: i32,
-    option: u64,
-    handle: u64,
-    unregister_command: usize,
-    transport: T,
-}
-
-impl<T: KernelTransport> BreakOwner<T> {
-    fn new(scno: i32, option: u64, handle: u64, unregister_command: usize, transport: T) -> Self {
-        Self {
-            scno,
-            option,
-            handle,
-            unregister_command,
-            transport,
-        }
-    }
-
-    fn RawHandle(&self) -> u64 {
-        self.handle
-    }
-
-    unsafe fn Invoke(&self, command: usize, args: [usize; 5]) -> isize {
-        unsafe { self.transport.Invoke(self.scno, self.option, command, args) }
-    }
-}
-
-impl<T: KernelTransport> Drop for BreakOwner<T> {
-    fn drop(&mut self) {
-        if self.handle == 0 {
-            return;
-        }
-        unsafe {
-            let _ = self.Invoke(self.unregister_command, [self.handle as usize, 0, 0, 0, 0]);
-        }
-        self.handle = 0;
-    }
-}
-
-pub struct PageBreakHandle<T: KernelTransport> {
-    owner: BreakOwner<T>,
-}
-
-impl<T: KernelTransport> PageBreakHandle<T> {
-    pub fn RawHandle(&self) -> u64 {
-        self.owner.RawHandle()
-    }
-
-    pub fn SetRegisters(&self, registers: &mut PtRegsSet) -> bool {
-        unsafe {
-            self.owner.Invoke(
-                CMD_SET_PAGE_HBRK_REGS,
-                [
-                    self.RawHandle() as usize,
-                    registers as *mut PtRegsSet as usize,
-                    0,
-                    0,
-                    0,
-                ],
-            ) > 0
-        }
-    }
-}
-
-pub struct MmuBreakHandle<T: KernelTransport> {
-    owner: BreakOwner<T>,
-}
-
-impl<T: KernelTransport> MmuBreakHandle<T> {
-    pub fn RawHandle(&self) -> u64 {
-        self.owner.RawHandle()
-    }
-
-    pub fn SetShared(&self, config: &mut MmuBreakSharedConfig) -> bool {
-        config.handle = self.RawHandle();
-        unsafe {
-            self.owner.Invoke(
-                CMD_SET_MMU_BRK_SHARED,
-                [config as *mut MmuBreakSharedConfig as usize, 0, 0, 0, 0],
-            ) > 0
-        }
-    }
-
-    pub fn Arm(&self) -> bool {
-        unsafe {
-            self.owner
-                .Invoke(CMD_ARM_MMU_BRK, [self.RawHandle() as usize, 0, 0, 0, 0])
-                > 0
-        }
-    }
-}
-
-pub struct ShadowBreakHandle<T: KernelTransport> {
-    owner: BreakOwner<T>,
-}
-
-impl<T: KernelTransport> ShadowBreakHandle<T> {
-    pub fn RawHandle(&self) -> u64 {
-        self.owner.RawHandle()
-    }
-
-    pub fn SetRegister(&self, register: i8, value: u64) -> bool {
-        unsafe {
-            self.owner.Invoke(
-                CMD_SET_HBRK_REGS,
-                [
-                    self.RawHandle() as usize,
-                    register as usize,
-                    value as usize,
-                    0,
-                    0,
-                ],
-            ) > 0
-        }
-    }
-}
-
-pub struct ShadowHookHandle<T: KernelTransport> {
-    owner: BreakOwner<T>,
-}
-
-impl<T: KernelTransport> ShadowHookHandle<T> {
-    pub fn RawHandle(&self) -> u64 {
-        self.owner.RawHandle()
     }
 }
