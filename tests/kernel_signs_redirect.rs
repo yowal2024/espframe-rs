@@ -23,7 +23,7 @@ fn set_passes_type_and_three_direct_arguments_without_request_wrapper() {
         456,
         999,
         Transport(|cmd, args: [usize; 5]| {
-            assert_eq!(cmd, 0x10032);
+            assert_eq!(cmd, 0x10031);
             assert_eq!((args[1], args[4]), (4, 0));
             assert_eq!(
                 unsafe { std::slice::from_raw_parts(args[2] as *const u8, args[1]) },
@@ -46,7 +46,7 @@ fn stop_uses_only_type_and_zero_unused_slots() {
         456,
         0,
         Transport(|cmd, args| {
-            assert_eq!(cmd, 0x10033);
+            assert_eq!(cmd, 0x10032);
             assert_eq!(args, [1, 0, 0, 0, 0]);
             0
         }),
@@ -124,7 +124,7 @@ fn read_commands_follow_shifted_tgcp_commands_and_shared_net_commands() {
     assert_eq!(CMD_READ_SPOOF_STOP, CMD_READ_SPOOF_SET + 1);
     assert_eq!(
         (CMD_NET_SPOOF_SET, CMD_TGCP_MIDDLE_SET),
-        (0x10029, 0x1002e)
+        (0x10028, 0x1002d)
     );
 }
 
@@ -160,7 +160,7 @@ fn group_set_passes_signed_configuration_and_independent_root_as_borrowed_entrie
         456,
         0,
         Transport(|cmd, args: [usize; 5]| {
-            assert_eq!(cmd, 0x10034);
+            assert_eq!(cmd, 0x10033);
             assert_eq!((args[1], args[3], args[4]), (2, 0, 0));
             let entries = unsafe {
                 std::slice::from_raw_parts(args[2] as *const SignsRedirectGroupEntry, args[1])
@@ -286,6 +286,6 @@ fn group_command_appends_after_stop_without_shifting_single_entry_commands() {
             CMD_READ_SPOOF_STOP,
             CMD_READ_SPOOF_SET_GROUP
         ),
-        (0x10032, 0x10033, 0x10034)
+        (0x10031, 0x10032, 0x10033)
     );
 }

@@ -164,7 +164,7 @@ fn set_borrows_buffers_and_registers_before_a_target_pid_exists() {
         456,
         0,
         Transport(|command, args: [usize; 5]| {
-            assert_eq!(command, 0x10029);
+            assert_eq!(command, 0x10028);
             let request = unsafe { &*(args[1] as *const RsaRedirectSetRequest) };
             assert_eq!(request.flags, 1);
             assert_eq!(request.expected_crc, 0x11223344);
@@ -216,7 +216,7 @@ fn rewrap_only_zeros_file_fields_and_uses_only_explicit_capture_pid() {
         456,
         999,
         Transport(|command, args: [usize; 5]| {
-            assert_eq!(command, 0x10029);
+            assert_eq!(command, 0x10028);
             let request = unsafe { &*(args[1] as *const RsaRedirectSetRequest) };
             assert_eq!(request.capture_pid, 234);
             assert_eq!(request.flags, 0);
@@ -339,7 +339,7 @@ fn delete_selects_profile_by_crc() {
         456,
         0,
         Transport(|command, args: [usize; 5]| {
-            assert_eq!(command, 0x1002a);
+            assert_eq!(command, 0x10029);
             assert_eq!(args, [0, 0x11223344, 0, 0, 0]);
             0
         }),
@@ -354,7 +354,7 @@ fn read_returns_key_nonce_identity_and_overflow_and_caps_batch_size() {
         456,
         0,
         Transport(|command, args: [usize; 5]| {
-            assert_eq!(command, 0x1002b);
+            assert_eq!(command, 0x1002a);
             assert_eq!(args[2], 16);
             assert_ne!(args[3], 0);
             unsafe {
@@ -427,7 +427,7 @@ fn stats_returns_counters_without_version_negotiation() {
         456,
         0,
         Transport(|command, args: [usize; 5]| {
-            assert_eq!(command, 0x1002c);
+            assert_eq!(command, 0x1002b);
             let stats = unsafe { &mut *(args[1] as *mut RsaRedirectStats) };
             stats.profiles = 2;
             stats.rewrapped = 11;

@@ -21,7 +21,13 @@ pub const CALL_MEMORY_USER: u8 = 8;
 pub const CALL_MEMORY_DCACHE: u8 = 16;
 
 pub const UDP_CAP_MAX_PAYLOAD: u32 = 2048;
-pub const UDP_CAP_READ_MAX: usize = 32;
+pub const UDP_CAP_BATCH_MAX: usize = 32;
+pub const UDP_CAP_SHARED_MAX: usize = 32 * 1024 * 1024;
+pub const UDP_CAP_SHARED_DEFAULT: usize = 4 * 1024 * 1024;
+pub const UDP_CAP_QUEUE_SLOTS_MAX: usize = 64;
+pub const UDP_CAP_ACTIVE: u32 = 1;
+pub const UDP_CAP_STOPPED: u32 = 2;
+pub const UDP_CAP_INVALID: u32 = 3;
 pub const UDP_CAP_F_TRUNC: u16 = 1;
 pub const RSA_REDIRECT_MAX_PROFILES: usize = 8;
 pub const RSA_REDIRECT_READ_MAX: usize = 16;
@@ -51,8 +57,7 @@ pub const CMD_UNREGISTER_TTBR0_HOOK: usize = CMD_REGISTER_TTBR0_HOOK + 1;
 pub const CMD_CREATE_TOUCH_EVENT_LISTENER: usize = CMD_UNREGISTER_TTBR0_HOOK + 1;
 pub const CMD_TOUCH_EVENT_UPDATE_SCREEN_INFO: usize = CMD_CREATE_TOUCH_EVENT_LISTENER + 1;
 pub const CMD_UDP_CAP_INIT: usize = CMD_TOUCH_EVENT_UPDATE_SCREEN_INFO + 1;
-pub const CMD_UDP_CAP_READ: usize = CMD_UDP_CAP_INIT + 1;
-pub const CMD_UDP_CAP_STOP: usize = CMD_UDP_CAP_READ + 1;
+pub const CMD_UDP_CAP_STOP: usize = CMD_UDP_CAP_INIT + 1;
 pub const CMD_GYRO_EVENT_CONFIGURE: usize = CMD_UDP_CAP_STOP + 1;
 pub const CMD_NET_SPOOF_SET: usize = CMD_GYRO_EVENT_CONFIGURE + 1;
 pub const CMD_NET_SPOOF_STOP: usize = CMD_NET_SPOOF_SET + 1;
@@ -66,6 +71,9 @@ pub const CMD_TGCP_MIDDLE_STATS: usize = CMD_TGCP_MIDDLE_READ + 1;
 pub const CMD_READ_SPOOF_SET: usize = CMD_TGCP_MIDDLE_STATS + 1;
 pub const CMD_READ_SPOOF_STOP: usize = CMD_READ_SPOOF_SET + 1;
 pub const CMD_READ_SPOOF_SET_GROUP: usize = CMD_READ_SPOOF_STOP + 1;
+pub const CMD_PLUGIN_LOAD: usize = CMD_READ_SPOOF_SET_GROUP + 1;
+pub const CMD_PLUGIN_CONTROL: usize = CMD_PLUGIN_LOAD + 1;
+pub const CMD_PLUGIN_UNLOAD: usize = CMD_PLUGIN_CONTROL + 1;
 
 /// Adapter selector passed in the first direct argument slot of spoof commands.
 #[repr(usize)]
@@ -266,8 +274,8 @@ impl MemoryRequest {
 pub struct UdpCapPacket {
     pub seq: u64,
     pub ts_ns: u64,
-    pub src_ip: u32,
-    pub dst_ip: u32,
+    pub src_ip: [u8; 16],
+    pub dst_ip: [u8; 16],
     pub src_port: u16,
     pub dst_port: u16,
     pub payload_len: u16,
@@ -282,8 +290,8 @@ impl Default for UdpCapPacket {
         Self {
             seq: 0,
             ts_ns: 0,
-            src_ip: 0,
-            dst_ip: 0,
+            src_ip: [0; 16],
+            dst_ip: [0; 16],
             src_port: 0,
             dst_port: 0,
             payload_len: 0,
@@ -293,27 +301,6 @@ impl Default for UdpCapPacket {
             payload: [0; UDP_CAP_MAX_PAYLOAD as usize],
         }
     }
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct UdpCapInitRequest {
-    pub pid: i32,
-    pub reserved0: u32,
-    pub min_payload: u16,
-    pub max_payload: u16,
-    pub reserved1: u32,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct UdpCapReadRequest {
-    pub buf: u64,
-    pub max_count: u32,
-    pub out_count: u32,
-    pub overflow: u64,
-    pub captured: u64,
-    pub reserved: u32,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

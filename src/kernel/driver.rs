@@ -63,7 +63,7 @@ impl<T: KernelTransport> KernelDriver<T> {
         self.configuration_revision = self.configuration_revision.wrapping_add(1);
     }
 
-    unsafe fn Invoke(&self, command: usize, args: [usize; 5]) -> isize {
+    pub(super) unsafe fn Invoke(&self, command: usize, args: [usize; 5]) -> isize {
         unsafe { self.transport.Invoke(self.scno, self.option, command, args) }
     }
 
@@ -517,74 +517,6 @@ impl<T: KernelTransport> KernelDriver<T> {
                 ],
             ) as u64
         }
-    }
-
-    pub fn UdpCapInitRaw(&self, target_pid: i32, min_payload: u16, max_payload: u16) -> isize {
-        if target_pid <= 0
-            || min_payload > max_payload
-            || u32::from(max_payload) > UDP_CAP_MAX_PAYLOAD
-        {
-            return -22;
-        }
-        let request = UdpCapInitRequest {
-            pid: target_pid,
-            min_payload,
-            max_payload,
-            ..Default::default()
-        };
-        unsafe {
-            self.Invoke(
-                CMD_UDP_CAP_INIT,
-                [(&request as *const UdpCapInitRequest) as usize, 0, 0, 0, 0],
-            )
-        }
-    }
-
-    pub fn UdpCapInit(&self, target_pid: i32, min_payload: u16, max_payload: u16) -> bool {
-        self.UdpCapInitRaw(target_pid, min_payload, max_payload) >= 0
-    }
-
-    pub fn UdpCapRead(&self, packets: &mut [UdpCapPacket]) -> Option<UdpCapReadStats> {
-        if packets.is_empty() {
-            return None;
-        }
-        let max_count = packets.len().min(UDP_CAP_READ_MAX) as u32;
-        let mut request = UdpCapReadRequest {
-            buf: packets.as_mut_ptr() as u64,
-            max_count,
-            ..Default::default()
-        };
-        let result = unsafe {
-            self.Invoke(
-                CMD_UDP_CAP_READ,
-                [
-                    (&mut request as *mut UdpCapReadRequest) as usize,
-                    0,
-                    0,
-                    0,
-                    0,
-                ],
-            )
-        };
-        if result < 0
-            || request.out_count > max_count
-            || request.out_count as usize > packets.len()
-            || packets
-                .iter()
-                .take(request.out_count as usize)
-                .any(|packet| u32::from(packet.payload_len) > UDP_CAP_MAX_PAYLOAD)
-        {
-            return None;
-        }
-        Some(UdpCapReadStats {
-            count: request.out_count,
-            overflow: request.overflow,
-            captured: request.captured,
-        })
-    }
-
-    pub fn UdpCapStop(&self) -> bool {
-        unsafe { self.Invoke(CMD_UDP_CAP_STOP, [0; 5]) >= 0 }
     }
 
     /// Arm content discovery for new IPv4 TCP connections of selected UIDs.

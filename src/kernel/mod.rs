@@ -1,7 +1,10 @@
 #![allow(non_snake_case)]
 
 pub mod abi;
+pub mod udp_rules_abi;
+pub mod plugin;
 mod driver;
+pub mod udp_capture;
 mod memory_flags;
 mod root_shell;
 mod rsa_redirect;
@@ -14,6 +17,7 @@ mod worker;
 pub use abi::{SpoofType, Ttbr0HookType};
 pub use driver::{KernelDriver, ModuleBaseLookup, Ttbr0HookHandle};
 pub use memory_flags::SharedMemoryFlags;
+pub use udp_capture::UdpCaptureSession;
 pub use root_shell::{run_root_command, RootShell, SystemRootShell};
 pub use rsa_redirect::{RsaRedirectConfig, RsaRedirectFile};
 pub use signs_redirect::SignsRedirectConfig;
