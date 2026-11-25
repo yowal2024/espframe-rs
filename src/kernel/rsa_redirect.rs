@@ -77,3 +77,14 @@ pub(super) fn status(result: isize) -> Result<(), isize> {
         _ => Err(-71), // EPROTO: SET, DEL and STATS return zero on success.
     }
 }
+
+
+pub const RSA_ADD: usize = 1;
+pub const RSA_REMOVE: usize = 2;
+pub const RSA_READ: usize = 3;
+pub const RSA_STATS: usize = 4;
+pub const RSA_STOP: usize = 5;
+
+pub(super) fn handle(value: u64) -> Result<usize, isize> {
+    if value == 0 || value > isize::MAX as u64 { Err(-22) } else { Ok(value as usize) }
+}

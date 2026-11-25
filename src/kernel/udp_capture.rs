@@ -13,7 +13,7 @@ use std::sync::{
 
 pub const CP_START: usize = 1;
 pub const CP_STOP: usize = 2;
-// Reproducible trusted ARM64 ELF, built from kernel/plugins/udp_capture.c.
+// Reproducible trusted ARM64 ELF, built from plugins/native/plugins/udp_capture.c in this SDK.
 const CAPTURE_PLUGIN: &[u8] = include_bytes!("plugins/udp_capture.cp");
 
 #[repr(C)]

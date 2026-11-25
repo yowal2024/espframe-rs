@@ -1,20 +1,37 @@
-# UDP capture plugin asset
+# Shared native plugins
 
-The SDK embeds the trusted ARM64 ELF `udp_capture.cp` in `UdpCapLoad`.
-Its source of truth is kernel/plugins/udp_capture.c; the matching source and
-build inputs are included in udp_capture_source. There are no kernel-symbol
-imports or per-packet plugin callbacks. The host owns the mmap ring.
+This SDK owns native plugin source, its freestanding build tooling and matching
+host-interface headers in native/. A kernel source checkout is not required.
 
-Rebuild from this directory with the GNU AArch64 toolchain:
+- native/plugins/tgcp.c and tgcp.h: reusable TGCP protocol and handshake.
+- native/plugins/udp_capture.c: bounded UDP capture configuration.
+- native/plugins/raw_rules.c: generic UDP byte rules.
+- native/plugins/framed_crc.c: framed CRC example.
+- native/plugins/read_replace.c: equal-length read replacement.
+- native/plugins/build.py, runtime.c and plugin.lds: common ARM64 ELF toolchain.
 
-    python3 udp_capture_source/plugins/build.py udp_capture_source/plugins/udp_capture.c --out udp_capture.cp
+UamEdge owns its RSA protocol source in rust/host/plugins/rsa/. Its plugin uses
+this SDK's rsa_sdk.h. The kernel owns loading, resource lifetime, I/O and crypto
+services; application protocol implementations do not live in the kernel repo.
 
-The recorded binary was built with aarch64-linux-gnu-gcc 13.3.0. Input and output
-SHA-256 values are in udp_capture.sha256.json. Different compiler versions can
-produce a different ELF; deploy matching host, SDK and trusted plugin inputs.
+From this directory, with aarch64-linux-gnu-gcc installed:
 
-LOAD carries image/configuration plus the target PID. CONTROL carries
-[handle, CP_START, caller_mmap, mmap_bytes, 0]. CP_STOP drains and releases the
-ring but retains the handle; UdpCapStop and session Stop/Drop use UNLOAD.
-All reads consume shared memory without a transport call. A forked child cannot
-read, stop, unmap or unload its parent's session through the owning wrapper.
+    python3 native/plugins/build.py native/plugins/udp_capture.c --out udp_capture.cp
+    python3 native/plugins/build.py native/plugins/tgcp.c --out /tmp/tgcp.tp
+    python3 native/plugins/build.py native/plugins/read_replace.c --out /tmp/read_replace.rp
+
+UdpCapLoad embeds udp_capture.cp. Its authoritative source is native/plugins/
+udp_capture.c; udp_capture.sha256.json records source/output hashes. It has no
+per-packet callback; the host owns the mmap ring. UdpCapStart loads and binds;
+UdpCapStop and session Stop/Drop unload the exact handle. Reads are memory-only.
+
+Use the SDK Git revision pinned by each application's Cargo.toml/Cargo.lock.
+Build application-owned plugins using this revision's native/plugins/build.py.
+All shared interface headers must match the kernel; current kernel fixture
+builders compare them after normalizing line endings before compiling. There is no ABI negotiation.
+
+The recorded compiler is aarch64-linux-gnu-gcc 13.3.0. On 2026-11-25, plugins
+rebuilt from project-owned sources matched the executed assets byte-for-byte.
+GKI 5.10/6.1 QEMU exercised production-linked fixture modules, real traffic and
+unload races. Full Android enforcing-policy app and physical-device coverage
+remain unverified.

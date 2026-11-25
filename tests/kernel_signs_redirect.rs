@@ -23,7 +23,7 @@ fn set_passes_type_and_three_direct_arguments_without_request_wrapper() {
         456,
         999,
         Transport(|cmd, args: [usize; 5]| {
-            assert_eq!(cmd, 0x1002b);
+            assert_eq!(cmd, 0x10026);
             assert_eq!((args[1], args[4]), (4, 0));
             assert_eq!(
                 unsafe { std::slice::from_raw_parts(args[2] as *const u8, args[1]) },
@@ -46,7 +46,7 @@ fn stop_uses_only_type_and_zero_unused_slots() {
         456,
         0,
         Transport(|cmd, args| {
-            assert_eq!(cmd, 0x1002c);
+            assert_eq!(cmd, 0x10027);
             assert_eq!(args, [1, 0, 0, 0, 0]);
             0
         }),
@@ -120,11 +120,11 @@ fn maximum_entry_is_supported_without_any_offset() {
 
 #[test]
 fn read_commands_follow_shared_net_commands() {
-    assert_eq!(CMD_READ_SPOOF_SET, CMD_NET_SPOOF_BIND + 1);
+    assert_eq!(CMD_READ_SPOOF_SET, CMD_GYRO_EVENT_CONFIGURE + 1);
     assert_eq!(CMD_READ_SPOOF_STOP, CMD_READ_SPOOF_SET + 1);
     assert_eq!(
-        (CMD_NET_SPOOF_SET, CMD_READ_SPOOF_SET),
-        (0x10026, 0x1002b)
+        (CMD_GYRO_EVENT_CONFIGURE, CMD_READ_SPOOF_SET),
+        (0x10025, 0x10026)
     );
 }
 
@@ -160,7 +160,7 @@ fn group_set_passes_signed_configuration_and_independent_root_as_borrowed_entrie
         456,
         0,
         Transport(|cmd, args: [usize; 5]| {
-            assert_eq!(cmd, 0x1002d);
+            assert_eq!(cmd, 0x10028);
             assert_eq!((args[1], args[3], args[4]), (2, 0, 0));
             let entries = unsafe {
                 std::slice::from_raw_parts(args[2] as *const SignsRedirectGroupEntry, args[1])
@@ -286,6 +286,6 @@ fn group_command_appends_after_stop_without_shifting_single_entry_commands() {
             CMD_READ_SPOOF_STOP,
             CMD_READ_SPOOF_SET_GROUP
         ),
-        (0x1002b, 0x1002c, 0x1002d)
+        (0x10026, 0x10027, 0x10028)
     );
 }

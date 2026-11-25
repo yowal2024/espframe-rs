@@ -8,10 +8,9 @@ mod driver;
 pub mod udp_capture;
 mod memory_flags;
 mod root_shell;
-mod rsa_redirect;
+pub mod rsa_redirect;
 mod signs_redirect;
 mod transport;
-mod type7_proxy;
 #[cfg(any(test, target_os = "android"))]
 mod worker;
 
@@ -23,7 +22,6 @@ pub use root_shell::{run_root_command, RootShell, SystemRootShell};
 pub use rsa_redirect::{RsaRedirectConfig, RsaRedirectFile};
 pub use signs_redirect::SignsRedirectConfig;
 pub use transport::{KernelTransport, SyscallTransport};
-pub use type7_proxy::Type7ProxyConfig;
 #[cfg(target_os = "android")]
 pub use worker::prepare_current_worker;
 

@@ -3,7 +3,7 @@
 #define NATIVE_PLUGIN_SDK_H
 #include <linux/types.h>
 #define PLUGIN_DESCRIPTOR_MAGIC 0x4e4154504c554749ULL
-enum plugin_type { PLUGIN_UDP = 1, PLUGIN_READ, PLUGIN_TCP, PLUGIN_CAPTURE };
+enum plugin_type { PLUGIN_UDP = 1, PLUGIN_READ, PLUGIN_TCP, PLUGIN_CAPTURE, PLUGIN_RSA };
 /* String capacities include the terminating NUL. Version is descriptive only. */
 #define PLUGIN_NAME_CAP 32U
 #define PLUGIN_VERSION_CAP 32U
@@ -39,7 +39,7 @@ typedef const struct plugin_descriptor *(*plugin_entry_fn)(void);
 #define PLUGIN_AUTHOR(value) __PLUGIN_TEXT(author, value, PLUGIN_AUTHOR_CAP)
 #define PLUGIN_DESCRIPTION(value) __PLUGIN_TEXT(description, value, PLUGIN_DESCRIPTION_CAP)
 #define PLUGIN_TYPE(kind) \
-    _Static_assert((kind) == PLUGIN_UDP || (kind) == PLUGIN_READ || (kind) == PLUGIN_TCP || (kind) == PLUGIN_CAPTURE, "invalid plugin type"); \
+    _Static_assert((kind) == PLUGIN_UDP || (kind) == PLUGIN_READ || (kind) == PLUGIN_TCP || (kind) == PLUGIN_CAPTURE || (kind) == PLUGIN_RSA, "invalid plugin type"); \
     enum { __plugin_type = (kind) }
 #define __PLUGIN_HEADER { \
     .magic = PLUGIN_DESCRIPTOR_MAGIC, .type = __plugin_type, \

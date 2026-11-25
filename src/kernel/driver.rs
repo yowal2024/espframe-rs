@@ -2,7 +2,6 @@ use super::abi::*;
 use super::rsa_redirect::{self, RsaRedirectConfig};
 use super::signs_redirect::{self, SignsRedirectConfig};
 use super::transport::KernelTransport;
-use super::type7_proxy::{self, Type7ProxyConfig};
 use std::ffi::{CStr, CString};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -651,91 +650,77 @@ impl<T: KernelTransport> KernelDriver<T> {
         self.TcpPluginStats(handle)
     }
 
-    /// Register a profile. Does not depend on self.Pid(), open a file,
-    /// or register a UID. The kernel copies borrowed buffers before returning.
-    /// File validation occurs on the selected application's first matching read.
-    pub fn UamNetSet(&self, config: &RsaRedirectConfig<'_>) -> Result<(), isize> {
+    /// Load a trusted RSA ELF and its first joint UDP/file profile.
+    /// # Safety
+    /// The image executes in kernel context and must obey the RSA SDK contract.
+    pub unsafe fn RsaPluginLoad(&self, image: &[u8], config: &RsaRedirectConfig<'_>) -> Result<u64, isize> {
+        if image.is_empty() || image.len() > super::plugin::UP_MAX_IMAGE { return Err(-22); }
         let request = config.request()?;
-        let result = unsafe {
-            self.Invoke(
-                CMD_NET_SPOOF_SET,
-                [
-                    SpoofType::Uam as usize,
-                    (&request as *const RsaRedirectSetRequest) as usize,
-                    0,
-                    0,
-                    0,
-                ],
-            )
-        };
-        rsa_redirect::status(result)
+        let result = unsafe { self.Invoke(CMD_PLUGIN_LOAD, [
+            image.as_ptr() as usize, image.len(), &request as *const _ as usize,
+            core::mem::size_of::<RsaRedirectSetRequest>(), 0,
+        ]) };
+        if result > 0 { Ok(result as u64) } else { Err(if result < 0 { result } else { -71 }) }
     }
 
-    /// Delete one CRC profile, including its queued results and file binding.
-    /// Does not alter the UID list. Update a profile by deleting then setting it.
-    pub fn UamNetStop(&self, expected_crc: u32) -> Result<(), isize> {
-        let result = unsafe {
-            self.Invoke(
-                CMD_NET_SPOOF_STOP,
-                [SpoofType::Uam as usize, expected_crc as usize, 0, 0, 0],
-            )
-        };
-        rsa_redirect::status(result)
+    /// Add a copied profile to the exact loaded RSA instance (up to eight).
+    /// ADD preserves the plugin handle; duplicate CRCs/patterns fail atomically.
+    pub fn UamNetSet(&self, handle: u64, config: &RsaRedirectConfig<'_>) -> Result<(), isize> {
+        let handle = rsa_redirect::handle(handle)?;
+        let request = config.request()?;
+        rsa_redirect::status(unsafe { self.Invoke(CMD_PLUGIN_CONTROL, [
+            handle, rsa_redirect::RSA_ADD, &request as *const _ as usize,
+            core::mem::size_of::<RsaRedirectSetRequest>(), 0,
+        ]) })
     }
 
-    /// Consume at most 16 records. Only records[..stats.count] are valid after
-    /// success; ignore the buffer on error. Deduplicate sequence on retries.
-    /// dropped counts queue overflow; no session secrets are logged here.
-    pub fn UamNetRead(
-        &self,
-        records: &mut [RsaRedirectResult],
-    ) -> Result<RsaRedirectReadStats, isize> {
-        if records.is_empty() {
-            return Err(-22);
-        }
-        let max_count = records.len().min(RSA_REDIRECT_READ_MAX);
+    /// Remove one CRC profile and its queued results/file binding.
+    pub fn UamNetStop(&self, handle: u64, expected_crc: u32) -> Result<(), isize> {
+        let handle = rsa_redirect::handle(handle)?;
+        rsa_redirect::status(unsafe { self.Invoke(CMD_PLUGIN_CONTROL, [
+            handle, rsa_redirect::RSA_REMOVE, expected_crc as usize, 0, 0,
+        ]) })
+    }
+
+    /// Consume the loaded instance's shared queue. EFAULT retains records;
+    /// deduplicate sequences on retry. Clear submitted secret bytes on errors.
+    pub fn UamNetRead(&self, handle: u64, records: &mut [RsaRedirectResult])
+        -> Result<RsaRedirectReadStats, isize>
+    {
+        let handle = rsa_redirect::handle(handle)?;
+        if records.is_empty() { return Err(-22); }
+        let capacity = records.len().min(RSA_REDIRECT_READ_MAX);
+        let submitted = &mut records[..capacity];
+        submitted.fill(RsaRedirectResult::default());
         let mut dropped = 0_u64;
-        let result = unsafe {
-            self.Invoke(
-                CMD_NET_SPOOF_READ,
-                [
-                    SpoofType::Uam as usize,
-                    records.as_mut_ptr() as usize,
-                    max_count,
-                    (&mut dropped as *mut u64) as usize,
-                    0,
-                ],
-            )
-        };
-        if result < 0 {
-            return Err(result);
+        let result = unsafe { self.Invoke(CMD_PLUGIN_CONTROL, [
+            handle, rsa_redirect::RSA_READ, submitted.as_mut_ptr() as usize,
+            capacity, &mut dropped as *mut u64 as usize,
+        ]) };
+        if result < 0 || result as usize > capacity {
+            submitted.fill(RsaRedirectResult::default());
+            return Err(if result < 0 { result } else { -71 });
         }
-        if result as usize > max_count {
-            return Err(-71);
-        }
-        Ok(RsaRedirectReadStats {
-            count: result as u32,
-            dropped,
-        })
+        Ok(RsaRedirectReadStats { count: result as u32, dropped })
     }
 
-    /// Read global RSA counters using the matching kernel's output layout.
-    pub fn UamNetStats(&self) -> Result<RsaRedirectStats, isize> {
+    /// Counters retain their existing aggregate RSA semantics.
+    pub fn UamNetStats(&self, handle: u64) -> Result<RsaRedirectStats, isize> {
+        let handle = rsa_redirect::handle(handle)?;
         let mut stats = RsaRedirectStats::default();
-        let result = unsafe {
-            self.Invoke(
-                CMD_NET_SPOOF_STATS,
-                [
-                    SpoofType::Uam as usize,
-                    (&mut stats as *mut RsaRedirectStats) as usize,
-                    0,
-                    0,
-                    0,
-                ],
-            )
-        };
-        rsa_redirect::status(result)?;
+        rsa_redirect::status(unsafe { self.Invoke(CMD_PLUGIN_CONTROL, [
+            handle, rsa_redirect::RSA_STATS, &mut stats as *mut _ as usize,
+            core::mem::size_of::<RsaRedirectStats>(), 0,
+        ]) })?;
         Ok(stats)
+    }
+
+    /// Stop every profile; retain the exact loaded handle for later ADD.
+    pub fn RsaPluginStop(&self, handle: u64) -> Result<(), isize> {
+        let handle = rsa_redirect::handle(handle)?;
+        rsa_redirect::status(unsafe { self.Invoke(CMD_PLUGIN_CONTROL, [
+            handle, rsa_redirect::RSA_STOP, 0, 0, 0,
+        ]) })
     }
 
     /// Enable bounded encrypted-entry replacement through the vfs_read inline hook.
@@ -774,102 +759,6 @@ impl<T: KernelTransport> KernelDriver<T> {
     pub fn DfmReadStop(&self) -> Result<(), isize> {
         signs_redirect::status(unsafe {
             self.Invoke(CMD_READ_SPOOF_STOP, [SpoofType::Dfm as usize, 0, 0, 0, 0])
-        })
-    }
-
-    /// Arm before new UDP sockets. The kernel copies and validates the public
-    /// certificate/root and returns a positive generation owned by this caller.
-    pub fn DfmNetSet(&self, config: &Type7ProxyConfig<'_>) -> Result<u64, isize> {
-        let result = unsafe {
-            self.Invoke(
-                CMD_NET_SPOOF_SET,
-                [
-                    SpoofType::Dfm as usize,
-                    config.certificate.as_ptr() as usize,
-                    config.root.as_ptr() as usize,
-                    0,
-                    0,
-                ],
-            )
-        };
-        if result > 0 {
-            Ok(result as u64)
-        } else {
-            Err(if result < 0 { result } else { -71 })
-        }
-    }
-
-    /// Bind the complete notification token to its initial K0. Borrowed buffers
-    /// remain valid through synchronous copying and remain caller-owned afterward.
-    pub fn DfmNetBind(
-        &self,
-        generation: u64,
-        token: &[u8; 20],
-        initial_key: &[u8; 16],
-    ) -> Result<(), isize> {
-        let generation = type7_proxy::generation(generation)?;
-        type7_proxy::status(unsafe {
-            self.Invoke(
-                CMD_NET_SPOOF_BIND,
-                [
-                    SpoofType::Dfm as usize,
-                    generation,
-                    token.as_ptr() as usize,
-                    initial_key.as_ptr() as usize,
-                    0,
-                ],
-            )
-        })
-    }
-
-    /// Erase the proxy configuration and queued results. Previously claimed
-    /// sockets remain terminal until closed; restart with SET and a new socket.
-    pub fn DfmNetStop(&self, generation: u64) -> Result<(), isize> {
-        let generation = type7_proxy::generation(generation)?;
-        type7_proxy::status(unsafe {
-            self.Invoke(
-                CMD_NET_SPOOF_STOP,
-                [SpoofType::Dfm as usize, generation, 0, 0, 0],
-            )
-        })
-    }
-
-    /// Consume up to 16 verified Ks records. Pre-touch writable output for the
-    /// kernel's nofault copy. Clear the submitted capacity on errors, including
-    /// partial copies; entries beyond that capacity are untouched. Only the
-    /// returned count is valid. Failed copies consume records and count as drops.
-    pub fn DfmNetRead(
-        &self,
-        generation: u64,
-        records: &mut [Type7ProxyResult],
-    ) -> Result<Type7ProxyReadStats, isize> {
-        let generation = type7_proxy::generation(generation)?;
-        if records.is_empty() {
-            return Err(-22);
-        }
-        let capacity = records.len().min(TYPE7_PROXY_READ_MAX);
-        let submitted = &mut records[..capacity];
-        submitted.fill(Type7ProxyResult::default());
-        let mut dropped = 0_u64;
-        let result = unsafe {
-            self.Invoke(
-                CMD_NET_SPOOF_READ,
-                [
-                    SpoofType::Dfm as usize,
-                    generation,
-                    submitted.as_mut_ptr() as usize,
-                    capacity,
-                    &mut dropped as *mut u64 as usize,
-                ],
-            )
-        };
-        if result < 0 || result as usize > capacity {
-            submitted.fill(Type7ProxyResult::default());
-            return Err(if result < 0 { result } else { -71 });
-        }
-        Ok(Type7ProxyReadStats {
-            count: result as u32,
-            dropped,
         })
     }
 

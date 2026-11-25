@@ -57,12 +57,7 @@ pub const CMD_UNREGISTER_TTBR0_HOOK: usize = CMD_REGISTER_TTBR0_HOOK + 1;
 pub const CMD_CREATE_TOUCH_EVENT_LISTENER: usize = CMD_UNREGISTER_TTBR0_HOOK + 1;
 pub const CMD_TOUCH_EVENT_UPDATE_SCREEN_INFO: usize = CMD_CREATE_TOUCH_EVENT_LISTENER + 1;
 pub const CMD_GYRO_EVENT_CONFIGURE: usize = CMD_TOUCH_EVENT_UPDATE_SCREEN_INFO + 1;
-pub const CMD_NET_SPOOF_SET: usize = CMD_GYRO_EVENT_CONFIGURE + 1;
-pub const CMD_NET_SPOOF_STOP: usize = CMD_NET_SPOOF_SET + 1;
-pub const CMD_NET_SPOOF_READ: usize = CMD_NET_SPOOF_STOP + 1;
-pub const CMD_NET_SPOOF_STATS: usize = CMD_NET_SPOOF_READ + 1;
-pub const CMD_NET_SPOOF_BIND: usize = CMD_NET_SPOOF_STATS + 1;
-pub const CMD_READ_SPOOF_SET: usize = CMD_NET_SPOOF_BIND + 1;
+pub const CMD_READ_SPOOF_SET: usize = CMD_GYRO_EVENT_CONFIGURE + 1;
 pub const CMD_READ_SPOOF_STOP: usize = CMD_READ_SPOOF_SET + 1;
 pub const CMD_READ_SPOOF_SET_GROUP: usize = CMD_READ_SPOOF_STOP + 1;
 pub const CMD_PLUGIN_LOAD: usize = CMD_READ_SPOOF_SET_GROUP + 1;
@@ -79,30 +74,6 @@ pub enum SpoofType {
 
 pub const SIGNS_REDIRECT_MAX_ENTRY: usize = 4096;
 pub const SIGNS_REDIRECT_GROUP_MAX: usize = 4;
-pub const TYPE7_PROXY_READ_MAX: usize = 16;
-
-/// A verified proxy exchange. `key` is the server-side Ks; the client retains
-/// its configured K0. IPv4 uses mapped IPv6 bytes; scalars are host-endian.
-/// No Debug implementation because this record contains a session key.
-#[repr(C, align(8))]
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
-pub struct Type7ProxyResult {
-    pub sequence: u64,
-    pub timestamp_ns: u64,
-    pub socket_id: u64,
-    pub pid: u32,
-    pub local_port: u16,
-    pub remote_port: u16,
-    pub remote_addr: [u8; 16],
-    pub key: [u8; 16],
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Type7ProxyReadStats {
-    pub count: u32,
-    pub dropped: u64,
-}
-
 /// One borrowed member of a Signs SET_GROUP call. The kernel copies the
 /// descriptor and its byte buffers before returning; `reserved` must be zero.
 #[repr(C, align(8))]

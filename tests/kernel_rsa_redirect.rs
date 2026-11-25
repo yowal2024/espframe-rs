@@ -1,4 +1,5 @@
 use espframe::kernel::abi::*;
+use espframe::kernel::rsa_redirect::*;
 use espframe::kernel::{KernelDriver, KernelTransport, RsaRedirectConfig, RsaRedirectFile};
 use std::mem::{align_of, offset_of, size_of};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -11,10 +12,9 @@ where
     F: Fn(usize, [usize; 5]) -> isize + Send + Sync,
 {
     unsafe fn Invoke(&self, scno: i32, option: u64, command: usize, args: [usize; 5]) -> isize {
-        assert_eq!(args[0], 0);
+        assert_eq!(args[0], 37);
         assert_eq!(scno, 123);
         assert_eq!(option, 456);
-        assert_eq!(&args[4..], &[0; 1]);
         (self.0)(command, args)
     }
 }
@@ -38,61 +38,64 @@ fn file() -> RsaRedirectFile<'static> {
 }
 
 #[test]
-fn register_contract_set_starts_with_flags_without_version() {
+fn register_contract_set_add_copies_flags_without_version() {
     let driver = KernelDriver::new(
         123,
         456,
         0,
         Transport(|command, args: [usize; 5]| {
-            assert_eq!(command, CMD_NET_SPOOF_SET);
-            assert_eq!(&args[2..], &[0; 3]);
-            let words = unsafe { std::slice::from_raw_parts(args[1] as *const u32, 6) };
+            assert_eq!(command, CMD_PLUGIN_CONTROL);
+            assert_eq!(args[1], RSA_ADD);
+            assert_eq!(&args[3..], &[72, 0]);
+            let words = unsafe { std::slice::from_raw_parts(args[2] as *const u32, 6) };
             assert_eq!(words, &[0, 0x11223344, 0x55667788, 7, 0, 0]);
             0
         }),
     );
-    assert_eq!(driver.UamNetSet(&config()), Ok(()));
+    assert_eq!(driver.UamNetSet(37, &config()), Ok(()));
 }
 
 #[test]
-fn register_contract_stop_passes_type_and_crc_directly() {
+fn register_contract_stop_passes_handle_and_crc_directly() {
     let driver = KernelDriver::new(
         123,
         456,
         0,
         Transport(|command, args: [usize; 5]| {
-            assert_eq!(command, CMD_NET_SPOOF_STOP);
-            assert_eq!(args, [0, 0x11223344, 0, 0, 0]);
+            assert_eq!(command, CMD_PLUGIN_CONTROL);
+            assert_eq!(args[1], RSA_REMOVE);
+            assert_eq!(args, [37, RSA_REMOVE, 0x11223344, 0, 0]);
             0
         }),
     );
-    assert_eq!(driver.UamNetStop(0x11223344), Ok(()));
+    assert_eq!(driver.UamNetStop(37, 0x11223344), Ok(()));
 }
 
 #[test]
-fn register_contract_read_passes_type_and_three_arguments_and_returns_count() {
+fn register_contract_read_passes_handle_and_three_arguments_and_returns_count() {
     let driver = KernelDriver::new(
         123,
         456,
         0,
         Transport(|command, args: [usize; 5]| {
-            assert_eq!(command, CMD_NET_SPOOF_READ);
-            assert_eq!(args[2], 2);
-            assert_ne!(args[1], 0);
-            assert_ne!(args[3], 0);
+            assert_eq!(command, CMD_PLUGIN_CONTROL);
+            assert_eq!(args[1], RSA_READ);
+            assert_eq!(args[3], 2);
+            assert_ne!(args[2], 0);
+            assert_ne!(args[4], 0);
             unsafe {
-                (args[1] as *mut RsaRedirectResult).write(RsaRedirectResult {
+                (args[2] as *mut RsaRedirectResult).write(RsaRedirectResult {
                     sequence: 42,
                     ..Default::default()
                 });
-                (args[3] as *mut u64).write(9);
+                (args[4] as *mut u64).write(9);
             }
             1
         }),
     );
     let mut records = [RsaRedirectResult::default(); 2];
     assert_eq!(
-        driver.UamNetRead(&mut records).unwrap(),
+        driver.UamNetRead(37, &mut records).unwrap(),
         RsaRedirectReadStats {
             count: 1,
             dropped: 9
@@ -109,15 +112,16 @@ fn register_contract_stats_starts_with_profile_count_without_version() {
         456,
         0,
         Transport(|command, args: [usize; 5]| {
-            assert_eq!(command, CMD_NET_SPOOF_STATS);
-            assert_eq!(&args[2..], &[0; 3]);
+            assert_eq!(command, CMD_PLUGIN_CONTROL);
+            assert_eq!(args[1], RSA_STATS);
+            assert_eq!(&args[3..], &[64, 0]);
             unsafe {
-                (args[1] as *mut u32).write(2);
+                (args[2] as *mut u32).write(2);
             }
             0
         }),
     );
-    assert_eq!(driver.UamNetStats().unwrap().profiles, 2);
+    assert_eq!(driver.UamNetStats(37).unwrap().profiles, 2);
 }
 
 #[test]
@@ -164,8 +168,9 @@ fn set_borrows_buffers_and_registers_before_a_target_pid_exists() {
         456,
         0,
         Transport(|command, args: [usize; 5]| {
-            assert_eq!(command, 0x10026);
-            let request = unsafe { &*(args[1] as *const RsaRedirectSetRequest) };
+            assert_eq!(command, CMD_PLUGIN_CONTROL);
+            assert_eq!(args[1], RSA_ADD);
+            let request = unsafe { &*(args[2] as *const RsaRedirectSetRequest) };
             assert_eq!(request.flags, 1);
             assert_eq!(request.expected_crc, 0x11223344);
             assert_eq!(request.original_crc, 0x55667788);
@@ -205,7 +210,7 @@ fn set_borrows_buffers_and_registers_before_a_target_pid_exists() {
         file: Some(file()),
         ..config()
     };
-    assert_eq!(driver.UamNetSet(&config), Ok(()));
+    assert_eq!(driver.UamNetSet(37, &config), Ok(()));
     assert_eq!(calls.load(Ordering::Relaxed), 1);
 }
 
@@ -216,8 +221,9 @@ fn rewrap_only_zeros_file_fields_and_uses_only_explicit_capture_pid() {
         456,
         999,
         Transport(|command, args: [usize; 5]| {
-            assert_eq!(command, 0x10026);
-            let request = unsafe { &*(args[1] as *const RsaRedirectSetRequest) };
+            assert_eq!(command, CMD_PLUGIN_CONTROL);
+            assert_eq!(args[1], RSA_ADD);
+            let request = unsafe { &*(args[2] as *const RsaRedirectSetRequest) };
             assert_eq!(request.capture_pid, 234);
             assert_eq!(request.flags, 0);
             assert_eq!(request.entry_len, 0);
@@ -230,7 +236,7 @@ fn rewrap_only_zeros_file_fields_and_uses_only_explicit_capture_pid() {
         capture_pid: 234,
         ..config()
     };
-    assert_eq!(driver.UamNetSet(&config), Ok(()));
+    assert_eq!(driver.UamNetSet(37, &config), Ok(()));
 }
 
 #[test]
@@ -298,7 +304,7 @@ fn invalid_configs_are_rejected_before_invoking_the_kernel() {
         },
     ];
     for config in invalid {
-        assert_eq!(driver.UamNetSet(&config), Err(-22));
+        assert_eq!(driver.UamNetSet(37, &config), Err(-22));
     }
 }
 
@@ -312,8 +318,9 @@ fn file_patterns_accept_minimum_and_maximum_lengths_without_a_location() {
             456,
             0,
             Transport(|command, args: [usize; 5]| {
-                assert_eq!(command, CMD_NET_SPOOF_SET);
-                let request = unsafe { &*(args[1] as *const RsaRedirectSetRequest) };
+                assert_eq!(command, CMD_PLUGIN_CONTROL);
+            assert_eq!(args[1], RSA_ADD);
+                let request = unsafe { &*(args[2] as *const RsaRedirectSetRequest) };
                 assert_eq!(request.flags, 1);
                 assert_eq!(request.entry_len, length as u32);
                 assert_eq!(request.original_entry, original.as_ptr() as u64);
@@ -328,7 +335,7 @@ fn file_patterns_accept_minimum_and_maximum_lengths_without_a_location() {
             }),
             ..config()
         };
-        assert_eq!(driver.UamNetSet(&config), Ok(()));
+        assert_eq!(driver.UamNetSet(37, &config), Ok(()));
     }
 }
 
@@ -339,12 +346,13 @@ fn delete_selects_profile_by_crc() {
         456,
         0,
         Transport(|command, args: [usize; 5]| {
-            assert_eq!(command, 0x10027);
-            assert_eq!(args, [0, 0x11223344, 0, 0, 0]);
+            assert_eq!(command, CMD_PLUGIN_CONTROL);
+            assert_eq!(args[1], RSA_REMOVE);
+            assert_eq!(args, [37, RSA_REMOVE, 0x11223344, 0, 0]);
             0
         }),
     );
-    assert_eq!(driver.UamNetStop(0x11223344), Ok(()));
+    assert_eq!(driver.UamNetStop(37, 0x11223344), Ok(()));
 }
 
 #[test]
@@ -354,11 +362,12 @@ fn read_returns_key_nonce_identity_and_overflow_and_caps_batch_size() {
         456,
         0,
         Transport(|command, args: [usize; 5]| {
-            assert_eq!(command, 0x10028);
-            assert_eq!(args[2], 16);
-            assert_ne!(args[3], 0);
+            assert_eq!(command, CMD_PLUGIN_CONTROL);
+            assert_eq!(args[1], RSA_READ);
+            assert_eq!(args[3], 16);
+            assert_ne!(args[4], 0);
             unsafe {
-                (args[1] as *mut RsaRedirectResult).write(RsaRedirectResult {
+                (args[2] as *mut RsaRedirectResult).write(RsaRedirectResult {
                     sequence: 10,
                     pid: 234,
                     key: [0x42; 32],
@@ -368,13 +377,13 @@ fn read_returns_key_nonce_identity_and_overflow_and_caps_batch_size() {
                 });
             }
             unsafe {
-                (args[3] as *mut u64).write(7);
+                (args[4] as *mut u64).write(7);
             }
             1
         }),
     );
     let mut records = [RsaRedirectResult::default(); 20];
-    let stats = driver.UamNetRead(&mut records).unwrap();
+    let stats = driver.UamNetRead(37, &mut records).unwrap();
     assert_eq!(stats.count, 1);
     assert_eq!(stats.dropped, 7);
     assert_eq!(records[0].key, [0x42; 32]);
@@ -396,18 +405,18 @@ fn read_accepts_an_empty_queue_and_rejects_an_empty_buffer() {
         456,
         0,
         Transport(|_, args: [usize; 5]| {
-            assert_eq!(args[2], 1);
+            assert_eq!(args[3], 1);
             unsafe {
-                (args[3] as *mut u64).write(0);
+                (args[4] as *mut u64).write(0);
             }
             calls.fetch_add(1, Ordering::Relaxed);
             0
         }),
     );
-    assert_eq!(driver.UamNetRead(&mut []).unwrap_err(), -22);
+    assert_eq!(driver.UamNetRead(37, &mut []).unwrap_err(), -22);
     assert_eq!(calls.load(Ordering::Relaxed), 0);
     let mut records = [RsaRedirectResult::default(); 1];
-    assert_eq!(driver.UamNetRead(&mut records).unwrap().count, 0);
+    assert_eq!(driver.UamNetRead(37, &mut records).unwrap().count, 0);
     assert_eq!(calls.load(Ordering::Relaxed), 1);
 }
 
@@ -416,7 +425,7 @@ fn read_rejects_counts_exceeding_the_supplied_buffer() {
     for count in [2, isize::MAX] {
         let driver = KernelDriver::new(123, 456, 0, Transport(|_, _: [usize; 5]| count));
         let mut records = [RsaRedirectResult::default(); 1];
-        assert_eq!(driver.UamNetRead(&mut records).unwrap_err(), -71);
+        assert_eq!(driver.UamNetRead(37, &mut records).unwrap_err(), -71);
     }
 }
 
@@ -427,8 +436,9 @@ fn stats_returns_counters_without_version_negotiation() {
         456,
         0,
         Transport(|command, args: [usize; 5]| {
-            assert_eq!(command, 0x10029);
-            let stats = unsafe { &mut *(args[1] as *mut RsaRedirectStats) };
+            assert_eq!(command, CMD_PLUGIN_CONTROL);
+            assert_eq!(args[1], RSA_STATS);
+            let stats = unsafe { &mut *(args[2] as *mut RsaRedirectStats) };
             stats.profiles = 2;
             stats.rewrapped = 11;
             stats.rewritten_reads = 12;
@@ -437,7 +447,7 @@ fn stats_returns_counters_without_version_negotiation() {
             0
         }),
     );
-    let stats = driver.UamNetStats().unwrap();
+    let stats = driver.UamNetStats(37).unwrap();
     assert_eq!(
         (
             stats.profiles,
@@ -456,19 +466,55 @@ fn all_commands_preserve_negative_errors() {
         let driver = KernelDriver::new(123, 456, 0, Transport(|_, _| result));
         let expected = result;
         let mut records = [RsaRedirectResult::default(); 1];
-        assert_eq!(driver.UamNetSet(&config()), Err(expected));
-        assert_eq!(driver.UamNetStop(0x11223344), Err(expected));
-        assert_eq!(driver.UamNetRead(&mut records).unwrap_err(), expected);
-        assert_eq!(driver.UamNetStats().unwrap_err(), expected);
+        assert_eq!(driver.UamNetSet(37, &config()), Err(expected));
+        assert_eq!(driver.UamNetStop(37, 0x11223344), Err(expected));
+        assert_eq!(driver.UamNetRead(37, &mut records).unwrap_err(), expected);
+        assert_eq!(driver.UamNetStats(37).unwrap_err(), expected);
     }
 }
 
 #[test]
 fn status_commands_reject_positive_status_but_read_accepts_count() {
     let driver = KernelDriver::new(123, 456, 0, Transport(|_, _| 1));
-    assert_eq!(driver.UamNetSet(&config()), Err(-71));
-    assert_eq!(driver.UamNetStop(0x11223344), Err(-71));
-    assert_eq!(driver.UamNetStats().unwrap_err(), -71);
+    assert_eq!(driver.UamNetSet(37, &config()), Err(-71));
+    assert_eq!(driver.UamNetStop(37, 0x11223344), Err(-71));
+    assert_eq!(driver.UamNetStats(37).unwrap_err(), -71);
     let mut records = [RsaRedirectResult::default(); 1];
-    assert_eq!(driver.UamNetRead(&mut records).unwrap().count, 1);
+    assert_eq!(driver.UamNetRead(37, &mut records).unwrap().count, 1);
+}
+
+#[test]
+fn rsa_load_uses_five_direct_slots_and_positive_handle() {
+    struct Loader;
+    impl KernelTransport for Loader {
+        unsafe fn Invoke(&self, _:i32, _:u64, command:usize, a:[usize;5])->isize {
+            assert_eq!(command,CMD_PLUGIN_LOAD);
+            assert_eq!((a[1],a[3],a[4]),(4,72,0));
+            assert_eq!(unsafe {std::slice::from_raw_parts(a[0] as *const u8,4)}, b"ELF!");
+            assert_eq!(unsafe {(*(a[2] as *const RsaRedirectSetRequest)).key_id},7);
+            37
+        }
+    }
+    let driver=KernelDriver::new(123,456,0,Loader);
+    assert_eq!(unsafe {driver.RsaPluginLoad(b"ELF!",&config())},Ok(37));
+    assert_eq!(unsafe {driver.RsaPluginLoad(&[],&config())},Err(-22));
+}
+#[test]
+fn rsa_controls_reject_invalid_handles_before_transport() {
+    let driver=KernelDriver::new(123,456,0,Transport(|_,_| panic!("invalid handle reached transport")));
+    for handle in [0,u64::MAX] {
+        assert_eq!(driver.UamNetSet(handle,&config()),Err(-22));
+        assert_eq!(driver.UamNetStop(handle,1),Err(-22));
+        assert!(matches!(driver.UamNetStats(handle),Err(-22)));
+        assert_eq!(driver.UamNetRead(handle,&mut [RsaRedirectResult::default()]),Err(-22));
+        assert_eq!(driver.RsaPluginStop(handle),Err(-22));
+    }
+}
+#[test]
+fn rsa_stop_retains_handle_and_zeros_unused_slots() {
+    let driver=KernelDriver::new(123,456,0,Transport(|cmd,a|{
+        assert_eq!(cmd,CMD_PLUGIN_CONTROL);
+        assert_eq!(a,[37,RSA_STOP,0,0,0]);0
+    }));
+    assert_eq!(driver.RsaPluginStop(37),Ok(()));
 }

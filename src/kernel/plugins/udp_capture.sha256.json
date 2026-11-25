@@ -1,10 +1,10 @@
 {
-  "plugins/udp_capture.c": "3628c4c1f7b713525d89f44d68458b4b6ee88b9b08df199e2ab0fe3eaca4202a",
-  "plugins/plugin.h": "53c7bb91f467527e3a51b2464e2a77a7f6c47e477eed6d40fc1564d0065baf82",
-  "plugins/capture_sdk.h": "0aa86c2be5e18ea325648f5178b36521dc0f3ee2fa7634d78ec376fe88a53e18",
-  "network/capture_abi.h": "552fe671bdb4a8449bdaad6f0a765c270fa61e5c0a98e1513d03e5870df5632c",
-  "plugins/runtime.c": "fc3b7c226d88fd9d4b00db828480227a271a675693f3c327a114caae12e22eda",
-  "plugins/plugin.lds": "e9dfe9b95b9970a35dab4e10fba9147c94bb558ba755c5187969ab473bde9c97",
-  "plugins/build.py": "0488391d20a25e4242c15c3bb3f6ccd0d507e12a3b401ee783771f7b0fb891b6",
+  "native/plugins/udp_capture.c": "3628c4c1f7b713525d89f44d68458b4b6ee88b9b08df199e2ab0fe3eaca4202a",
+  "native/plugins/plugin.h": "d79127e65a36084ac1ded51892d9409dc0c092ab57b3a12b1f6f7f106b7193fb",
+  "native/plugins/capture_sdk.h": "0aa86c2be5e18ea325648f5178b36521dc0f3ee2fa7634d78ec376fe88a53e18",
+  "native/network/capture_abi.h": "552fe671bdb4a8449bdaad6f0a765c270fa61e5c0a98e1513d03e5870df5632c",
+  "native/plugins/runtime.c": "fc3b7c226d88fd9d4b00db828480227a271a675693f3c327a114caae12e22eda",
+  "native/plugins/plugin.lds": "e9dfe9b95b9970a35dab4e10fba9147c94bb558ba755c5187969ab473bde9c97",
+  "native/plugins/build.py": "0488391d20a25e4242c15c3bb3f6ccd0d507e12a3b401ee783771f7b0fb891b6",
   "udp_capture.cp": "8ba63a3a9bfc90c27e34be9e8df5e61127342fc43c61f76610a4b8bbcbc8ba3f"
 }
