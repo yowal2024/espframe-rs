@@ -186,7 +186,21 @@ pub struct TgcpMiddleReadStats {
     pub dropped: u64,
 }
 
-pub type TgcpMiddleStats = super::tcp_plugin::TcpPluginStats;
+/// Shared TCP plugin statistics; independent of protocol wrapper modules.
+#[repr(C, align(8))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TcpPluginStats {
+    pub status: u32,
+    pub padding: u32,
+    pub session_id: u64,
+    pub emitted: u64,
+    pub dropped: u64,
+    pub active_flows: u32,
+    pub queued_events: u32,
+    pub send_hits: u64,
+    pub recv_hits: u64,
+}
+pub type TgcpMiddleStats = TcpPluginStats;
 
 pub const GYRO_EVENT_ONCE: u32 = 1 << 0;
 pub const GYRO_EVENT_X: u32 = 1 << 1;

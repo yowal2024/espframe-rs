@@ -1,6 +1,7 @@
 //! Native TCP protocol plugins: the same LOAD/CONTROL/UNLOAD transport as UDP.
 use super::abi::CMD_PLUGIN_CONTROL;
 use super::{KernelDriver, KernelTransport};
+pub use super::abi::TcpPluginStats;
 pub const TP_CONFIG: usize = 1;
 pub const TP_STOP: usize = 2;
 pub const TP_READ: usize = 3;
@@ -29,19 +30,6 @@ impl Default for TcpPluginEvent {
 #[repr(C, align(8))]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct TcpPluginReadInfo { pub dropped: u64, pub session_id: u64 }
-#[repr(C, align(8))]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct TcpPluginStats {
-    pub status: u32,
-    pub padding: u32,
-    pub session_id: u64,
-    pub emitted: u64,
-    pub dropped: u64,
-    pub active_flows: u32,
-    pub queued_events: u32,
-    pub send_hits: u64,
-    pub recv_hits: u64,
-}
 const _: () = {
     assert!(core::mem::size_of::<TcpPluginEvent>() == 4200);
     assert!(core::mem::size_of::<TcpPluginReadInfo>() == 16);
