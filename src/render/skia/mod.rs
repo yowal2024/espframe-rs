@@ -40,6 +40,15 @@ static LATEST: Mutex<Option<Arc<frame::Frame>>> = Mutex::new(None);
 static ACTIVE: AtomicBool = AtomicBool::new(false);
 static FILTER: AtomicBool = AtomicBool::new(true);
 
+/// Hide overlay content from screenshots and recording while retaining physical display output.
+/// Applies to the active session without rebuilding its viewport, textures, or hooks.
+pub fn set_skip_screenshot(enabled: bool) {
+    if FILTER.load(Ordering::Acquire) != enabled {
+        FILTER.store(enabled, Ordering::Release);
+        crate::espframe_log!("skia.screenshot_filter", "enabled={}", enabled);
+    }
+}
+
 // These distinct callback addresses are command markers consumed by snapshot().
 // They are never called on RenderEngine, which has no ImGui context.
 #[cfg(any(test, target_os = "android"))]

@@ -20,7 +20,7 @@ impl SkiaWindowBackend {
         Ok(result)
     }
     fn filter(&self, enabled: bool) -> Result<(), WindowError> {
-        super::FILTER.store(enabled, std::sync::atomic::Ordering::Release);
+        super::set_skip_screenshot(enabled);
         Ok(())
     }
 }
