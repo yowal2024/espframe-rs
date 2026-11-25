@@ -11,8 +11,10 @@ host-interface headers in native/. A kernel source checkout is not required.
 - native/plugins/build.py, runtime.c and plugin.lds: common ARM64 ELF toolchain.
 
 UamEdge owns its RSA protocol source in rust/host/plugins/rsa/. Its plugin uses
-this SDK's rsa_sdk.h. The kernel owns loading, resource lifetime, I/O and crypto
-services; application protocol implementations do not live in the kernel repo.
+this SDK's service_sdk.h. Its configuration ABI, queue, CRC/key/file policies and
+Rust client live in UamEdge too. The kernel owns loading, callback lifetime,
+I/O, opaque file/PID resources and crypto primitives. Application protocol
+implementations and business state do not live in the kernel or shared SDK.
 
 From this directory, with aarch64-linux-gnu-gcc installed:
 
@@ -35,3 +37,13 @@ rebuilt from project-owned sources matched the executed assets byte-for-byte.
 GKI 5.10/6.1 QEMU exercised production-linked fixture modules, real traffic and
 unload races. Full Android enforcing-policy app and physical-device coverage
 remain unverified.
+
+## Generic service contract
+
+PLUGIN_SERVICE is a sleepable application service, not an RSA-specific type.
+Callbacks create/destroy/control run exclusively; UDP/read callbacks may overlap
+and use host mutexes for shared state. Interest flags select common read/send
+hooks. A send transaction stays alive through native submission and completion.
+Borrowed event tokens cannot escape callbacks. No background work is permitted.
+Application Rust wrappers use the unsafe generic PluginControlRaw entrypoint;
+operation meanings and configuration/result layouts belong to the application.

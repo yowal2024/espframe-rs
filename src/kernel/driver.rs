@@ -1,5 +1,4 @@
 use super::abi::*;
-use super::rsa_redirect::{self, RsaRedirectConfig};
 use super::transport::KernelTransport;
 use std::ffi::{CStr, CString};
 
@@ -647,79 +646,6 @@ impl<T: KernelTransport> KernelDriver<T> {
 
     pub fn TgcpMiddleStats(&self, handle: u64) -> Result<TgcpMiddleStats, isize> {
         self.TcpPluginStats(handle)
-    }
-
-    /// Load a trusted RSA ELF and its first joint UDP/file profile.
-    /// # Safety
-    /// The image executes in kernel context and must obey the RSA SDK contract.
-    pub unsafe fn RsaPluginLoad(&self, image: &[u8], config: &RsaRedirectConfig<'_>) -> Result<u64, isize> {
-        if image.is_empty() || image.len() > super::plugin::UP_MAX_IMAGE { return Err(-22); }
-        let request = config.request()?;
-        let result = unsafe { self.Invoke(CMD_PLUGIN_LOAD, [
-            image.as_ptr() as usize, image.len(), &request as *const _ as usize,
-            core::mem::size_of::<RsaRedirectSetRequest>(), 0,
-        ]) };
-        if result > 0 { Ok(result as u64) } else { Err(if result < 0 { result } else { -71 }) }
-    }
-
-    /// Add a copied profile to the exact loaded RSA instance (up to eight).
-    /// ADD preserves the plugin handle; duplicate CRCs/patterns fail atomically.
-    pub fn UamNetSet(&self, handle: u64, config: &RsaRedirectConfig<'_>) -> Result<(), isize> {
-        let handle = rsa_redirect::handle(handle)?;
-        let request = config.request()?;
-        rsa_redirect::status(unsafe { self.Invoke(CMD_PLUGIN_CONTROL, [
-            handle, rsa_redirect::RSA_ADD, &request as *const _ as usize,
-            core::mem::size_of::<RsaRedirectSetRequest>(), 0,
-        ]) })
-    }
-
-    /// Remove one CRC profile and its queued results/file binding.
-    pub fn UamNetStop(&self, handle: u64, expected_crc: u32) -> Result<(), isize> {
-        let handle = rsa_redirect::handle(handle)?;
-        rsa_redirect::status(unsafe { self.Invoke(CMD_PLUGIN_CONTROL, [
-            handle, rsa_redirect::RSA_REMOVE, expected_crc as usize, 0, 0,
-        ]) })
-    }
-
-    /// Consume the loaded instance's shared queue. EFAULT retains records;
-    /// deduplicate sequences on retry. Clear submitted secret bytes on errors.
-    pub fn UamNetRead(&self, handle: u64, records: &mut [RsaRedirectResult])
-        -> Result<RsaRedirectReadStats, isize>
-    {
-        let handle = rsa_redirect::handle(handle)?;
-        if records.is_empty() { return Err(-22); }
-        let capacity = records.len().min(RSA_REDIRECT_READ_MAX);
-        let submitted = &mut records[..capacity];
-        submitted.fill(RsaRedirectResult::default());
-        let mut dropped = 0_u64;
-        let result = unsafe { self.Invoke(CMD_PLUGIN_CONTROL, [
-            handle, rsa_redirect::RSA_READ, submitted.as_mut_ptr() as usize,
-            capacity, &mut dropped as *mut u64 as usize,
-        ]) };
-        if result < 0 || result as usize > capacity {
-            submitted.fill(RsaRedirectResult::default());
-            return Err(if result < 0 { result } else { -71 });
-        }
-        Ok(RsaRedirectReadStats { count: result as u32, dropped })
-    }
-
-    /// Counters retain their existing aggregate RSA semantics.
-    pub fn UamNetStats(&self, handle: u64) -> Result<RsaRedirectStats, isize> {
-        let handle = rsa_redirect::handle(handle)?;
-        let mut stats = RsaRedirectStats::default();
-        rsa_redirect::status(unsafe { self.Invoke(CMD_PLUGIN_CONTROL, [
-            handle, rsa_redirect::RSA_STATS, &mut stats as *mut _ as usize,
-            core::mem::size_of::<RsaRedirectStats>(), 0,
-        ]) })?;
-        Ok(stats)
-    }
-
-    /// Stop every profile; retain the exact loaded handle for later ADD.
-    pub fn RsaPluginStop(&self, handle: u64) -> Result<(), isize> {
-        let handle = rsa_redirect::handle(handle)?;
-        rsa_redirect::status(unsafe { self.Invoke(CMD_PLUGIN_CONTROL, [
-            handle, rsa_redirect::RSA_STOP, 0, 0, 0,
-        ]) })
     }
 
     /// Install a full-context or assembly leaf EL0 callback using an explicit type.

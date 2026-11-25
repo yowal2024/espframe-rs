@@ -29,10 +29,6 @@ pub const UDP_CAP_ACTIVE: u32 = 1;
 pub const UDP_CAP_STOPPED: u32 = 2;
 pub const UDP_CAP_INVALID: u32 = 3;
 pub const UDP_CAP_F_TRUNC: u16 = 1;
-pub const RSA_REDIRECT_MAX_PROFILES: usize = 8;
-pub const RSA_REDIRECT_READ_MAX: usize = 16;
-pub const RSA_REDIRECT_MAX_ENTRY: usize = 4096;
-pub const RSA_REDIRECT_F_FILE: u32 = 1;
 
 pub const CMD_GRANT_SU: usize = 0x10010;
 pub const CMD_IS_ENABLE_SU: usize = CMD_GRANT_SU + 1;
@@ -251,62 +247,6 @@ pub struct UdpCapReadStats {
     pub count: u32,
     pub overflow: u64,
     pub captured: u64,
-}
-
-/// Wire layout of kernel rsa_redirect_config. Use RsaRedirectConfig
-/// and KernelDriver::UamNetSet to keep all pointed-to buffers borrowed.
-#[repr(C, align(8))]
-#[derive(Clone, Copy, Default)]
-pub struct RsaRedirectSetRequest {
-    pub flags: u32,
-    pub expected_crc: u32,
-    pub original_crc: u32,
-    pub key_id: u32,
-    pub capture_pid: i32,
-    pub entry_len: u32,
-    pub private_der: u64,
-    pub public_der: u64,
-    pub original_entry: u64,
-    pub replacement_entry: u64,
-    pub private_der_len: u32,
-    pub public_der_len: u32,
-    pub reserved: [u32; 2],
-}
-
-/// A successfully submitted rewrapped UDP Hello. The remote address contains
-/// IPv6 network-order bytes; IPv4 uses ::ffff:a.b.c.d. Scalar fields are
-/// host-endian. Profile ownership is kernel-private. No Debug to avoid logging
-/// the session key and nonce accidentally. Sequence supports retry deduplication.
-#[repr(C, align(8))]
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
-pub struct RsaRedirectResult {
-    pub sequence: u64,
-    pub timestamp_ns: u64,
-    pub pid: i32,
-    pub remote_addr: [u8; 16],
-    pub key: [u8; 32],
-    pub nonce: [u8; 8],
-    pub _padding: [u8; 4],
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct RsaRedirectReadStats {
-    pub count: u32,
-    pub dropped: u64,
-}
-
-#[repr(C, align(8))]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct RsaRedirectStats {
-    pub profiles: u32,
-    pub _padding: u32,
-    pub rewrapped: u64,
-    pub crypto_failed: u64,
-    pub send_failed: u64,
-    pub rewritten_reads: u64,
-    pub read_failed: u64,
-    pub captured: u64,
-    pub dropped: u64,
 }
 
 #[repr(C)]

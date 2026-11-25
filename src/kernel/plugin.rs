@@ -73,6 +73,16 @@ impl<T: KernelTransport> KernelDriver<T> {
         if value == 0 { Err(-71) } else { status(value) }
     }
 
+    /// Forward a project-owned operation to a loaded plugin.
+    /// # Safety
+    /// The operation and all scalar/pointer arguments must match that image's
+    /// contract. Referenced storage must remain valid throughout this call.
+    pub unsafe fn PluginControlRaw(&self, handle: u64, operation: usize, args: [usize; 3]) -> isize {
+        if handle == 0 || handle > isize::MAX as u64 { return -22; }
+        unsafe { self.Invoke(CMD_PLUGIN_CONTROL,
+            [handle as usize, operation, args[0], args[1], args[2]]) }
+    }
+
     /// CONFIG success returns a replacement handle; all older handles/bindings
     /// become stale. PARAMS synchronously drains old readers before wiping data;
     /// it is not promised to be a low-latency per-frame update operation.
@@ -168,6 +178,21 @@ mod tests {
         assert_eq!(&calls[1].2[120..], &[8, 9]);
         assert_eq!(calls[2].0, CMD_PLUGIN_UNLOAD);
         assert_eq!(calls[2].1, [7, 0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn project_operation_is_forwarded_with_exact_arguments() {
+        let t = Transport::default();
+        let k = KernelDriver::new(1, 2, 3, t.clone());
+        for handle in [0, u64::MAX] {
+            assert_eq!(unsafe { k.PluginControlRaw(handle, 99, [11, 12, 13]) }, -22);
+        }
+        assert!(t.0.lock().unwrap().is_empty());
+        assert_eq!(unsafe { k.PluginControlRaw(7, 99, [11, 12, 13]) }, 0);
+        let calls = t.0.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, CMD_PLUGIN_CONTROL);
+        assert_eq!(calls[0].1, [7, 99, 11, 12, 13]);
     }
 
     #[test]

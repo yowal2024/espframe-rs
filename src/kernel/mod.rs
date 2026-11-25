@@ -8,7 +8,6 @@ mod driver;
 pub mod udp_capture;
 mod memory_flags;
 mod root_shell;
-pub mod rsa_redirect;
 mod transport;
 #[cfg(any(test, target_os = "android"))]
 mod worker;
@@ -18,7 +17,6 @@ pub use driver::{KernelDriver, ModuleBaseLookup, Ttbr0HookHandle};
 pub use memory_flags::SharedMemoryFlags;
 pub use udp_capture::UdpCaptureSession;
 pub use root_shell::{run_root_command, RootShell, SystemRootShell};
-pub use rsa_redirect::{RsaRedirectConfig, RsaRedirectFile};
 pub use transport::{KernelTransport, SyscallTransport};
 #[cfg(target_os = "android")]
 pub use worker::prepare_current_worker;
