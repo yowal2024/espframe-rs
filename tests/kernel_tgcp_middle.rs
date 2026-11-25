@@ -29,7 +29,7 @@ fn wire_layout_and_compacted_commands_match_c() {
     assert_eq!(size_of::<TcpPluginReadInfo>(), 16);
     assert_eq!(size_of::<TgcpMiddleStats>(), 56);
     assert_eq!(size_of::<TgcpMiddleEvent>(), 4216); // typed client view, not wire ABI
-    assert_eq!(CMD_READ_SPOOF_SET, CMD_GYRO_EVENT_CONFIGURE + 1);
+    assert_eq!(CMD_PLUGIN_LOAD, CMD_GYRO_EVENT_CONFIGURE + 1);
     assert_eq!(CMD_PLUGIN_CONTROL, CMD_PLUGIN_LOAD + 1);
     assert_eq!(CMD_PLUGIN_UNLOAD, CMD_PLUGIN_CONTROL + 1);
 }

@@ -1,6 +1,5 @@
 use super::abi::*;
 use super::rsa_redirect::{self, RsaRedirectConfig};
-use super::signs_redirect::{self, SignsRedirectConfig};
 use super::transport::KernelTransport;
 use std::ffi::{CStr, CString};
 
@@ -721,45 +720,6 @@ impl<T: KernelTransport> KernelDriver<T> {
         rsa_redirect::status(unsafe { self.Invoke(CMD_PLUGIN_CONTROL, [
             handle, rsa_redirect::RSA_STOP, 0, 0, 0,
         ]) })
-    }
-
-    /// Enable bounded encrypted-entry replacement through the vfs_read inline hook.
-    /// The kernel discovers the first unique overlapping match and binds its file.
-    /// No caller file open, fd, fixed offset, process lookup or request struct is needed.
-    pub fn DfmReadSet(&self, config: &SignsRedirectConfig<'_>) -> Result<(), isize> {
-        let result = unsafe { self.Invoke(CMD_READ_SPOOF_SET, config.arguments()?) };
-        signs_redirect::status(result)
-    }
-
-    /// Atomically publish one to four independently bound replacement members.
-    /// For example, supply a 128-byte signed configuration and a separate 32-byte
-    /// root using their actual on-disk encoding. Each member must be nonempty,
-    /// equal length and at most 4096 bytes; duplicate original bytes are rejected.
-    /// All matching disjoint members in one read are checked before any write;
-    /// overlapping matches fail closed. Publication does not make later reads
-    /// of separate files simultaneous. The kernel copies the borrowed buffers.
-    pub fn DfmReadSetGroup(&self, configs: &[SignsRedirectConfig<'_>]) -> Result<(), isize> {
-        let entries = signs_redirect::group_entries(configs)?;
-        signs_redirect::status(unsafe {
-            self.Invoke(
-                CMD_READ_SPOOF_SET_GROUP,
-                [
-                    SpoofType::Dfm as usize,
-                    configs.len(),
-                    entries.as_ptr() as usize,
-                    0,
-                    0,
-                ],
-            )
-        })
-    }
-
-    /// Drain the active Signs group and release all file/mode bindings.
-    /// Repeated STOP succeeds; already-returned application buffers are unchanged.
-    pub fn DfmReadStop(&self) -> Result<(), isize> {
-        signs_redirect::status(unsafe {
-            self.Invoke(CMD_READ_SPOOF_STOP, [SpoofType::Dfm as usize, 0, 0, 0, 0])
-        })
     }
 
     /// Install a full-context or assembly leaf EL0 callback using an explicit type.

@@ -99,7 +99,7 @@ fn context_and_compacted_command_contract() {
     assert_eq!(offset_of!(Ttbr0HookContext, pc), 0x318);
     assert_eq!(size_of::<Ttbr0LeafFrame>(), 32);
     assert_eq!([CMD_REGISTER_TTBR0_HOOK, CMD_UNREGISTER_TTBR0_HOOK, CMD_CREATE_TOUCH_EVENT_LISTENER], [0x10021, 0x10022, 0x10023]);
-    assert_eq!(CMD_READ_SPOOF_SET_GROUP, 0x10028);
+    assert_eq!(CMD_PLUGIN_UNLOAD, 0x10028);
 }
 
 #[test]

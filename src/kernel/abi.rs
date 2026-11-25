@@ -57,33 +57,9 @@ pub const CMD_UNREGISTER_TTBR0_HOOK: usize = CMD_REGISTER_TTBR0_HOOK + 1;
 pub const CMD_CREATE_TOUCH_EVENT_LISTENER: usize = CMD_UNREGISTER_TTBR0_HOOK + 1;
 pub const CMD_TOUCH_EVENT_UPDATE_SCREEN_INFO: usize = CMD_CREATE_TOUCH_EVENT_LISTENER + 1;
 pub const CMD_GYRO_EVENT_CONFIGURE: usize = CMD_TOUCH_EVENT_UPDATE_SCREEN_INFO + 1;
-pub const CMD_READ_SPOOF_SET: usize = CMD_GYRO_EVENT_CONFIGURE + 1;
-pub const CMD_READ_SPOOF_STOP: usize = CMD_READ_SPOOF_SET + 1;
-pub const CMD_READ_SPOOF_SET_GROUP: usize = CMD_READ_SPOOF_STOP + 1;
-pub const CMD_PLUGIN_LOAD: usize = CMD_READ_SPOOF_SET_GROUP + 1;
+pub const CMD_PLUGIN_LOAD: usize = CMD_GYRO_EVENT_CONFIGURE + 1;
 pub const CMD_PLUGIN_CONTROL: usize = CMD_PLUGIN_LOAD + 1;
 pub const CMD_PLUGIN_UNLOAD: usize = CMD_PLUGIN_CONTROL + 1;
-
-/// Adapter selector passed in the first direct argument slot of spoof commands.
-#[repr(usize)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SpoofType {
-    Uam = 0,
-    Dfm = 1,
-}
-
-pub const SIGNS_REDIRECT_MAX_ENTRY: usize = 4096;
-pub const SIGNS_REDIRECT_GROUP_MAX: usize = 4;
-/// One borrowed member of a Signs SET_GROUP call. The kernel copies the
-/// descriptor and its byte buffers before returning; `reserved` must be zero.
-#[repr(C, align(8))]
-#[derive(Clone, Copy, Default)]
-pub struct SignsRedirectGroupEntry {
-    pub original_ptr: u64,
-    pub replacement_ptr: u64,
-    pub length: u32,
-    pub reserved: u32,
-}
 
 pub const TGCP_MIDDLE_READ_MAX: usize = 16;
 pub const TGCP_MIDDLE_MAX_PAYLOAD: usize = 4096;
