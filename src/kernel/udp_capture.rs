@@ -11,6 +11,11 @@ use std::sync::{
     Arc,
 };
 
+pub const CP_START: usize = 1;
+pub const CP_STOP: usize = 2;
+// Reproducible trusted ARM64 ELF, built from kernel/plugins/udp_capture.c.
+const CAPTURE_PLUGIN: &[u8] = include_bytes!("plugins/udp_capture.cp");
+
 #[repr(C)]
 pub struct UdpCapSharedHeader {
     pub state: AtomicU32,
@@ -321,49 +326,64 @@ pub struct UdpCaptureSession<T: KernelTransport> {
 unsafe impl<T: KernelTransport> Send for UdpCaptureSession<T> {}
 
 impl<T: KernelTransport> KernelDriver<T> {
-    /// Register a mapping in the CALLER, never in target_pid's address space.
+    /// Load the bundled capture plugin. Target PID selects sockets; the calling
+    /// mm owns the plugin and any mapping subsequently bound to its handle.
+    pub fn UdpCapLoad(&self, target_pid: i32, min_payload: u16, max_payload: u16) -> Result<u64, isize> {
+        if target_pid <= 0 || min_payload == 0 || min_payload > max_payload
+            || u32::from(max_payload) > UDP_CAP_MAX_PAYLOAD {
+            return Err(-22);
+        }
+        let mut config = [0u8; 4];
+        config[..2].copy_from_slice(&min_payload.to_ne_bytes());
+        config[2..].copy_from_slice(&max_payload.to_ne_bytes());
+        match unsafe { self.Invoke(CMD_PLUGIN_LOAD, [CAPTURE_PLUGIN.as_ptr() as usize,
+            CAPTURE_PLUGIN.len(), config.as_ptr() as usize, config.len(), target_pid as usize]) } {
+            n if n > 0 => Ok(n as u64),
+            n if n < 0 => Err(n),
+            _ => Err(-71),
+        }
+    }
+
+    /// Register a mapping in the caller that loaded this capture handle.
     ///
     /// # Safety
     /// address..address+bytes must be a dedicated page-aligned shared writable
-    /// MAP_SHARED mapping, marked MADV_DONTFORK. Do not access it during INIT;
-    /// thereafter use the ownership protocol. Retain it until STOP completes.
-    pub unsafe fn UdpCapInitRaw(
+    /// MAP_SHARED mapping, marked MADV_DONTFORK. Do not access it during START;
+    /// thereafter use the ownership protocol. Retain it until STOP/UNLOAD completes.
+    pub unsafe fn UdpCapBindRaw(
         &self,
-        target_pid: i32,
+        handle: u64,
         address: *mut u8,
         bytes: usize,
-        min_payload: u16,
-        max_payload: u16,
     ) -> isize {
-        if target_pid <= 0
+        if handle == 0 || handle > isize::MAX as u64
             || address.is_null()
             || bytes == 0
             || bytes > UDP_CAP_SHARED_MAX
-            || min_payload == 0
-            || min_payload > max_payload
-            || u32::from(max_payload) > UDP_CAP_MAX_PAYLOAD
         {
             return -22;
         }
         unsafe {
             self.Invoke(
-                CMD_UDP_CAP_INIT,
+                CMD_PLUGIN_CONTROL,
                 [
-                    target_pid as usize,
+                    handle as usize,
+                    CP_START,
                     address as usize,
                     bytes,
-                    min_payload as usize,
-                    max_payload as usize,
+                    0,
                 ],
             )
         }
     }
 
+    /// Stop capture and unload its plugin. Use CP_STOP through raw CONTROL only
+    /// when retaining a loaded handle for a subsequent bind is intentional.
     pub fn UdpCapStop(&self, handle: u64) -> Result<(), isize> {
         if handle == 0 || handle > isize::MAX as u64 {
             return Err(-22);
         }
-        match unsafe { self.Invoke(CMD_UDP_CAP_STOP, [handle as usize, 0, 0, 0, 0]) } {
+        match unsafe { self.Invoke(CMD_PLUGIN_UNLOAD, [handle as usize, 0, 0, 0, 0]) } {
             0 => Ok(()),
             n if n < 0 => Err(n),
             _ => Err(-71),
@@ -377,17 +397,17 @@ impl<T: KernelTransport> KernelDriver<T> {
         max_payload: u16,
     ) -> Result<UdpCaptureSession<T>, isize> {
         let mapping = SharedMapping::new()?;
-        let handle = unsafe {
-            self.UdpCapInitRaw(
-                target_pid,
+        let handle = self.UdpCapLoad(target_pid, min_payload, max_payload)?;
+        let result = unsafe {
+            self.UdpCapBindRaw(
+                handle,
                 mapping.address.as_ptr(),
                 mapping.bytes,
-                min_payload,
-                max_payload,
             )
         };
-        if handle <= 0 {
-            return Err(if handle < 0 { handle } else { -71 });
+        if result != 0 {
+            let _ = self.UdpCapStop(handle);
+            return Err(if result < 0 { result } else { -71 });
         }
         let reader = match unsafe { RingReader::new(&mapping) } {
             Ok(reader) => reader,
@@ -427,9 +447,9 @@ impl<T: KernelTransport> UdpCaptureSession<T> {
             return Ok(());
         }
         let result = self.driver.UdpCapStop(self.handle);
-        if result.is_ok()
-            || unsafe { (*self.mapping.header()).state.load(Ordering::Acquire) } != UDP_CAP_ACTIVE
-        {
+        // Invalidating the ring releases pages, but a loaded plugin still owns
+        // its slot. Never turn a failed unload into success using ring state.
+        if result.is_ok() || result == Err(-116) {
             self.active = false;
             return Ok(());
         }
@@ -455,6 +475,7 @@ mod tests {
         next: u64,
         calls: Vec<usize>,
         bad_geometry: bool,
+        stop_error: Option<isize>,
     }
     #[derive(Clone, Default)]
     struct Mock(Arc<Mutex<State>>);
@@ -463,11 +484,18 @@ mod tests {
             let mut s = self.0.lock().unwrap();
             s.calls.push(command);
             match command {
-                CMD_UDP_CAP_INIT => unsafe {
-                    assert_eq!(args[0], 42);
-                    assert_eq!(&args[2..], &[UDP_CAP_SHARED_DEFAULT, 1, 2048]);
-                    assert_eq!(args[1] % 4096, 0);
-                    s.address = args[1];
+                CMD_PLUGIN_LOAD => {
+                    assert_eq!(args[3..], [4, 42]);
+                    let config = unsafe { core::slice::from_raw_parts(args[2] as *const u8, 4) };
+                    assert_eq!(config, [1, 0, 0, 8]);
+                    s.next += 1;
+                    s.next as isize
+                },
+                CMD_PLUGIN_CONTROL => unsafe {
+                    assert_eq!(args[..2], [s.next as usize, CP_START]);
+                    assert_eq!(&args[3..], &[UDP_CAP_SHARED_DEFAULT, 0]);
+                    assert_eq!(args[2] % 4096, 0);
+                    s.address = args[2];
                     let h = s.address as *mut UdpCapSharedHeader;
                     ptr::addr_of_mut!((*h).queue_count).write(if s.bad_geometry {
                         u32::MAX
@@ -476,11 +504,11 @@ mod tests {
                     });
                     ptr::addr_of_mut!((*h).slots_per_queue).write(8);
                     (*h).state.store(UDP_CAP_ACTIVE, Ordering::Release);
-                    s.next += 1;
-                    s.next as isize
+                    0
                 },
-                CMD_UDP_CAP_STOP => unsafe {
+                CMD_PLUGIN_UNLOAD => unsafe {
                     assert_eq!(args, [s.next as usize, 0, 0, 0, 0]);
+                    if let Some(error) = s.stop_error { return error; }
                     (*(s.address as *mut UdpCapSharedHeader))
                         .state
                         .store(UDP_CAP_STOPPED, Ordering::Release);
@@ -531,7 +559,7 @@ mod tests {
         true
     }
     #[test]
-    fn two_commands_merge_and_consume_without_transport_calls() {
+    fn plugin_controls_merge_and_consume_without_transport_calls() {
         let (mock, mut session) = start();
         let address = mock.0.lock().unwrap().address;
         unsafe {
@@ -562,13 +590,13 @@ mod tests {
         assert_eq!(session.Read(&mut packets).unwrap().count, 0);
         assert_eq!(packets, before);
         assert_eq!(session.Read(&mut []), Err(-22));
-        assert_eq!(mock.0.lock().unwrap().calls, [CMD_UDP_CAP_INIT]);
+        assert_eq!(mock.0.lock().unwrap().calls, [CMD_PLUGIN_LOAD, CMD_PLUGIN_CONTROL]);
         session.Stop().unwrap();
         assert_eq!(session.Read(&mut packets), Err(-108));
         drop(session);
         assert_eq!(
             mock.0.lock().unwrap().calls,
-            [CMD_UDP_CAP_INIT, CMD_UDP_CAP_STOP]
+            [CMD_PLUGIN_LOAD, CMD_PLUGIN_CONTROL, CMD_PLUGIN_UNLOAD]
         );
     }
     #[test]
@@ -579,8 +607,40 @@ mod tests {
         assert!(matches!(driver.UdpCapStart(42, 1, 2048), Err(-71)));
         assert_eq!(
             mock.0.lock().unwrap().calls,
-            [CMD_UDP_CAP_INIT, CMD_UDP_CAP_STOP]
+            [CMD_PLUGIN_LOAD, CMD_PLUGIN_CONTROL, CMD_PLUGIN_UNLOAD]
         );
+    }
+    #[test]
+    fn failed_bind_unloads_the_loaded_plugin() {
+        #[derive(Clone)]
+        struct Failure(Arc<Mutex<Vec<usize>>>);
+        impl KernelTransport for Failure {
+            unsafe fn Invoke(&self, _: i32, _: u64, command: usize, args: [usize; 5]) -> isize {
+                self.0.lock().unwrap().push(command);
+                match command {
+                    CMD_PLUGIN_LOAD => 19,
+                    CMD_PLUGIN_CONTROL => { assert_eq!(args[..2], [19, CP_START]); -14 },
+                    CMD_PLUGIN_UNLOAD => { assert_eq!(args, [19, 0, 0, 0, 0]); 0 },
+                    _ => panic!("unexpected command"),
+                }
+            }
+        }
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let driver = Arc::new(KernelDriver::new(1, 2, 3, Failure(calls.clone())));
+        assert!(matches!(driver.UdpCapStart(42, 1, 2048), Err(-14)));
+        assert_eq!(*calls.lock().unwrap(), [CMD_PLUGIN_LOAD, CMD_PLUGIN_CONTROL, CMD_PLUGIN_UNLOAD]);
+    }
+    #[test]
+    fn invalid_ring_still_requires_plugin_unload() {
+        let (mock, mut session) = start();
+        unsafe { (*session.mapping.header()).state.store(UDP_CAP_INVALID, Ordering::Release); }
+        mock.0.lock().unwrap().stop_error = Some(-16);
+        assert_eq!(session.Stop(), Err(-16));
+        mock.0.lock().unwrap().stop_error = None;
+        assert_eq!(session.Stop(), Ok(()));
+        drop(session);
+        assert_eq!(mock.0.lock().unwrap().calls,
+            [CMD_PLUGIN_LOAD, CMD_PLUGIN_CONTROL, CMD_PLUGIN_UNLOAD, CMD_PLUGIN_UNLOAD]);
     }
     #[test]
     fn rejects_bad_producer_and_payload_without_acknowledging() {
@@ -651,7 +711,7 @@ mod tests {
         session.mapping.guard.marker().store(0, Ordering::Relaxed);
         assert_eq!(session.Read(&mut [UdpCapPacket::default()]), Err(-18));
         assert_eq!(session.Stop(), Err(-18));
-        assert_eq!(mock.0.lock().unwrap().calls, [CMD_UDP_CAP_INIT]);
+        assert_eq!(mock.0.lock().unwrap().calls, [CMD_PLUGIN_LOAD, CMD_PLUGIN_CONTROL]);
         session.mapping.guard.marker().store(1, Ordering::Relaxed);
     }
     #[test]
@@ -695,6 +755,6 @@ mod tests {
             t.join().unwrap();
         }
         assert_eq!(seen, [EACH; 4]);
-        assert_eq!(mock.0.lock().unwrap().calls, [CMD_UDP_CAP_INIT]);
+        assert_eq!(mock.0.lock().unwrap().calls, [CMD_PLUGIN_LOAD, CMD_PLUGIN_CONTROL]);
     }
 }

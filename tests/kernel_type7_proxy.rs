@@ -27,7 +27,7 @@ fn set_passes_only_borrowed_public_material_and_returns_owned_generation() {
         456,
         0,
         Transport(|cmd, args: [usize; 5]| {
-            assert_eq!(cmd, 0x10028);
+            assert_eq!(cmd, 0x10026);
             assert_eq!(&args[3..], &[0; 2]);
             assert_eq!(
                 unsafe { std::slice::from_raw_parts(args[1] as *const u8, 128) },
@@ -54,7 +54,7 @@ fn bind_supplies_generation_token_and_initial_key_without_uid_or_endpoint() {
         456,
         0,
         Transport(|cmd, args: [usize; 5]| {
-            assert_eq!(cmd, 0x1002c);
+            assert_eq!(cmd, 0x1002a);
             assert_eq!((args[1], args[4]), (37, 0));
             assert_eq!(args[2], token.as_ptr() as usize);
             assert_eq!(args[3], key.as_ptr() as usize);
@@ -106,7 +106,7 @@ fn stop_passes_the_owned_generation_only() {
         456,
         0,
         Transport(|cmd, args| {
-            assert_eq!((cmd, args), (0x10029, [1, 37, 0, 0, 0]));
+            assert_eq!((cmd, args), (0x10027, [1, 37, 0, 0, 0]));
             0
         }),
     );
@@ -135,7 +135,7 @@ fn read_exposes_the_exact_64_byte_kernel_record() {
         456,
         0,
         Transport(|cmd, args: [usize; 5]| {
-            assert_eq!(cmd, 0x1002a);
+            assert_eq!(cmd, 0x10028);
             assert_eq!((args[1], args[3]), (37, 16));
             unsafe {
                 let records = std::slice::from_raw_parts_mut(args[2] as *mut Type7ProxyResult, 16);
