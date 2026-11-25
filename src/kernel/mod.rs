@@ -3,6 +3,7 @@
 pub mod abi;
 pub mod udp_rules_abi;
 pub mod plugin;
+pub mod tcp_plugin;
 mod driver;
 pub mod udp_capture;
 mod memory_flags;

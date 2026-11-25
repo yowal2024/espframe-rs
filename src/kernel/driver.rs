@@ -519,46 +519,28 @@ impl<T: KernelTransport> KernelDriver<T> {
         }
     }
 
-    /// Arm content discovery for new IPv4 TCP connections of selected UIDs.
-    /// Does not require self.Pid() or a known peer. The kernel copies the exact
-    /// canonical big-endian public prime before returning; private DH state is
-    /// generated independently per mode-3 connection.
-    pub fn TgcpMiddleSet(&self, prime: &[u8], generator: u32) -> Result<(), isize> {
-        if !tgcp_dh_parameters_valid(prime, generator) {
-            return Err(-22);
-        }
-        let result = unsafe {
-            self.Invoke(
-                CMD_TGCP_MIDDLE_SET,
-                [
-                    prime.as_ptr() as usize,
-                    prime.len(),
-                    generator as usize,
-                    0,
-                    0,
-                ],
-            )
-        };
-        if result == 0 {
-            Ok(())
-        } else {
-            Err(result)
-        }
+    /// Load the trusted TGCP ELF through the common native plugin interface.
+    /// # Safety
+    /// The image must be the trusted TGCP plugin built for the deployed kernel.
+    pub unsafe fn TgcpPluginLoad(&self, image: &[u8], prime: &[u8], generator: u32) -> Result<u64, isize> {
+        let config = super::tcp_plugin::tgcp_config(prime, generator)?;
+        unsafe { self.PluginLoad(image, &config) }
     }
 
-    pub fn TgcpMiddleStop(&self) -> Result<(), isize> {
-        let result = unsafe { self.Invoke(CMD_TGCP_MIDDLE_STOP, [0; 5]) };
-        if result == 0 {
-            Ok(())
-        } else {
-            Err(result)
-        }
+    pub fn TgcpPluginConfigure(&self, handle: u64, prime: &[u8], generator: u32) -> Result<u64, isize> {
+        let config = super::tcp_plugin::tgcp_config(prime, generator)?;
+        self.TcpPluginConfigure(handle, &config)
+    }
+
+    pub fn TgcpMiddleStop(&self, handle: u64) -> Result<(), isize> {
+        self.TcpPluginStop(handle)
     }
 
     /// Validate every returned record before exposing READY secrets or DATA.
     /// On any failure wipe the whole caller buffer, including previous records.
     pub fn TgcpMiddleRead(
         &self,
+        handle: u64,
         records: &mut [TgcpMiddleEvent],
     ) -> Result<TgcpMiddleReadStats, isize> {
         if records.is_empty() {
@@ -566,21 +548,46 @@ impl<T: KernelTransport> KernelDriver<T> {
         }
         records.fill(TgcpMiddleEvent::default());
         let max_count = records.len().min(TGCP_MIDDLE_READ_MAX) as u32;
-        let mut dropped = 0u64;
-        let mut session_id = 0u64;
+        // The generic wire record is smaller than the typed TGCP view.
+        // Read into the initialized caller allocation, then expand backwards:
+        // no per-poll heap allocation and no overlap with unread wire records.
+        use super::tcp_plugin::{TcpPluginEvent, TcpPluginReadInfo, TP_READ, TP_EVENT_METADATA};
+        let wire = records.as_mut_ptr().cast::<TcpPluginEvent>();
+        let mut info = TcpPluginReadInfo::default();
+        if handle == 0 { return Err(-22); }
         let result = unsafe {
-            self.Invoke(
-                CMD_TGCP_MIDDLE_READ,
-                [
-                    records.as_mut_ptr() as usize,
-                    max_count as usize,
-                    &mut dropped as *mut u64 as usize,
-                    &mut session_id as *mut u64 as usize,
-                    0,
-                ],
-            )
+            self.Invoke(CMD_PLUGIN_CONTROL,
+                [handle as usize, TP_READ, wire as usize, max_count as usize, &mut info as *mut _ as usize])
         };
-        let valid = result >= 0
+        let dropped = info.dropped;
+        let session_id = info.session_id;
+        let mut wire_valid = result >= 0 && result <= max_count as isize && session_id == handle;
+        if wire_valid {
+            for i in (0..result as usize).rev() {
+                let mut raw = unsafe { wire.add(i).read() };
+                let len = raw.payload_len as usize;
+                wire_valid &= raw.reserved == 0 && len <= TGCP_MIDDLE_MAX_PAYLOAD
+                    && raw.payload[len.min(TGCP_MIDDLE_MAX_PAYLOAD)..].iter().all(|v| *v == 0);
+                let out = &mut records[i];
+                *out = TgcpMiddleEvent::default();
+                out.seq = raw.seq; out.session_id = raw.session_id; out.socket_id = raw.socket_id;
+                out.ts_ns = raw.ts_ns; out.target_pid = raw.target_pid; out.sock_uid = raw.sock_uid;
+                out.family = raw.family; out.event_type = raw.event_type;
+                out.local_port = raw.local_port; out.remote_port = raw.remote_port;
+                out.local_addr = raw.local_addr; out.remote_addr = raw.remote_addr;
+                out.error = raw.error; out.flags = raw.flags; out.stream_offset = raw.stream_offset;
+                if raw.event_type == TP_EVENT_METADATA {
+                    wire_valid &= len == 20;
+                    out.kc.copy_from_slice(&raw.payload[..16]);
+                    out.key_mode = u32::from_ne_bytes(raw.payload[16..20].try_into().unwrap());
+                } else {
+                    out.payload_len = raw.payload_len;
+                    out.payload.copy_from_slice(&raw.payload);
+                }
+                super::tcp_plugin::wipe(&mut raw);
+            }
+        }
+        let valid = wire_valid
             && result <= max_count as isize
             && session_id != 0
             && records.iter().take(result.max(0) as usize).all(|r| {
@@ -630,7 +637,7 @@ impl<T: KernelTransport> KernelDriver<T> {
                     }
             });
         if !valid {
-            records.fill(TgcpMiddleEvent::default());
+            for record in records.iter_mut() { super::tcp_plugin::wipe(record); }
             return Err(if result < 0 { result } else { -71 });
         }
         Ok(TgcpMiddleReadStats {
@@ -640,24 +647,8 @@ impl<T: KernelTransport> KernelDriver<T> {
         })
     }
 
-    pub fn TgcpMiddleStats(&self) -> Result<TgcpMiddleStats, isize> {
-        let mut stats = TgcpMiddleStats::default();
-        let result = unsafe {
-            self.Invoke(
-                CMD_TGCP_MIDDLE_STATS,
-                [&mut stats as *mut TgcpMiddleStats as usize, 0, 0, 0, 0],
-            )
-        };
-        if result != 0 {
-            return Err(result);
-        }
-        if stats.padding != 0
-            || stats.status & !TGCP_MIDDLE_STATUS_RUNNING != 0
-            || (stats.status & TGCP_MIDDLE_STATUS_RUNNING != 0 && stats.session_id == 0)
-        {
-            return Err(-71);
-        }
-        Ok(stats)
+    pub fn TgcpMiddleStats(&self, handle: u64) -> Result<TgcpMiddleStats, isize> {
+        self.TcpPluginStats(handle)
     }
 
     /// Register a profile. Does not depend on self.Pid(), open a file,
@@ -967,7 +958,7 @@ fn tgcp_remote_ipv4(addr: &[u8; 16]) -> bool {
 
 // Match the kernel's canonical-encoding/range checks; this is not a primality
 // test. Comparing p > g + 1 avoids subtraction/underflow on caller input.
-fn tgcp_dh_parameters_valid(prime: &[u8], generator: u32) -> bool {
+pub(super) fn tgcp_dh_parameters_valid(prime: &[u8], generator: u32) -> bool {
     let len = prime.len();
     if !(1..=64).contains(&len) || prime[0] == 0 || prime[len - 1] & 1 == 0 || generator < 2 {
         return false;

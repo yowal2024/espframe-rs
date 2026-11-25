@@ -64,11 +64,7 @@ pub const CMD_NET_SPOOF_STOP: usize = CMD_NET_SPOOF_SET + 1;
 pub const CMD_NET_SPOOF_READ: usize = CMD_NET_SPOOF_STOP + 1;
 pub const CMD_NET_SPOOF_STATS: usize = CMD_NET_SPOOF_READ + 1;
 pub const CMD_NET_SPOOF_BIND: usize = CMD_NET_SPOOF_STATS + 1;
-pub const CMD_TGCP_MIDDLE_SET: usize = CMD_NET_SPOOF_BIND + 1;
-pub const CMD_TGCP_MIDDLE_STOP: usize = CMD_TGCP_MIDDLE_SET + 1;
-pub const CMD_TGCP_MIDDLE_READ: usize = CMD_TGCP_MIDDLE_STOP + 1;
-pub const CMD_TGCP_MIDDLE_STATS: usize = CMD_TGCP_MIDDLE_READ + 1;
-pub const CMD_READ_SPOOF_SET: usize = CMD_TGCP_MIDDLE_STATS + 1;
+pub const CMD_READ_SPOOF_SET: usize = CMD_NET_SPOOF_BIND + 1;
 pub const CMD_READ_SPOOF_STOP: usize = CMD_READ_SPOOF_SET + 1;
 pub const CMD_READ_SPOOF_SET_GROUP: usize = CMD_READ_SPOOF_STOP + 1;
 pub const CMD_PLUGIN_LOAD: usize = CMD_READ_SPOOF_SET_GROUP + 1;
@@ -190,19 +186,7 @@ pub struct TgcpMiddleReadStats {
     pub dropped: u64,
 }
 
-#[repr(C, align(8))]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct TgcpMiddleStats {
-    pub status: u32,
-    pub padding: u32,
-    pub session_id: u64,
-    pub emitted: u64,
-    pub dropped: u64,
-    pub active_flows: u32,
-    pub queued_events: u32,
-    pub send_hits: u64,
-    pub recv_hits: u64,
-}
+pub type TgcpMiddleStats = super::tcp_plugin::TcpPluginStats;
 
 pub const GYRO_EVENT_ONCE: u32 = 1 << 0;
 pub const GYRO_EVENT_X: u32 = 1 << 1;
